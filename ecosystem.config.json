@@ -1,0 +1,42 @@
+{
+  "invoiceAudit": {
+    "comment": "Edit these only — pm2-deploy.sh reads apiUrl for the Next.js build. API is not exposed publicly; browsers use /api on the web port.",
+    "apiHost": "127.0.0.1",
+    "apiPort": 9696,
+    "webHost": "0.0.0.0",
+    "webPort": 8686,
+    "apiUrl": "http://127.0.0.1:9696"
+  },
+  "apps": [
+    {
+      "name": "invoice-audit-api",
+      "cwd": "./api",
+      "script": "./api/.venv/bin/python",
+      "args": "-m uvicorn app.main:app --host 127.0.0.1 --port 9696",
+      "interpreter": "none",
+      "env": {
+        "PYTHONUNBUFFERED": "1"
+      },
+      "max_memory_restart": "1G"
+    },
+    {
+      "name": "invoice-audit-web",
+      "cwd": "./web",
+      "script": "npm",
+      "args": "run start -- -H 0.0.0.0 -p 8686",
+      "interpreter": "none",
+      "env": {
+        "NODE_ENV": "production",
+        "API_URL": "http://127.0.0.1:9696"
+      }
+    },
+    {
+      "name": "invoice-audit-maintenance",
+      "cwd": "./api",
+      "script": "./api/.venv/bin/python",
+      "args": "-m app.maintenance --loop",
+      "interpreter": "none",
+      "autorestart": true
+    }
+  ]
+}

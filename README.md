@@ -32,6 +32,10 @@ checks, accepts the flags that match the answer key, dismisses the rest, creates
 **Without a key it uses an offline oracle that replays the answer key with injected errors; everything after reading is real,
 but the reading accuracy it reports is not a model result.**
 
+## Deploy with PM2 (production server)
+
+See [docs/deployment-pm2.md](docs/deployment-pm2.md): edit `ecosystem.config.json` (`invoiceAudit` section), `api/.env.production.example`, and `./scripts/pm2-deploy.sh`.
+
 ## Backend and frontend run independently
 `api/` (FastAPI) and `web/` (Next.js) each have their own `Makefile`, `.env.example` and README. The only link is HTTP:
 the frontend proxies `/api/*` to `API_URL` (default http://127.0.0.1:8000), so either can run on its own machine.
