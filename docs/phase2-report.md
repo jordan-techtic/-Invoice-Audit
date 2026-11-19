@@ -60,8 +60,8 @@ Oracle accuracy by file type (harder files get more injected errors by design): 
 
 ## Assumptions made
 
-- MinIO runs from `chainguard/minio`, because the official images could not be pulled here. The API creates
-  the bucket at startup. Server-side encryption is left to the S3 bucket in production.
+- Local runs keep uploaded files in Postgres (`STORAGE_BACKEND=postgres`); there is no local object store. In production the
+  API creates the S3 bucket at startup, and server-side encryption is left to the bucket.
 - Zero retention is an agreement with Anthropic, not a request flag. `AI_ZDR_CONFIRMED` records that it was
   confirmed; real client data should not be sent until it is set.
 - Token prices (`PRICE_INPUT_PER_MTOK`, `PRICE_OUTPUT_PER_MTOK`) are placeholders; check current pricing.

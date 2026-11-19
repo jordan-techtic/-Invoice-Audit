@@ -10,7 +10,7 @@ synthetic/out/answer_key.json:
 	cd synthetic && ([ -d .venv ] || python3 -m venv .venv) && .venv/bin/pip install -q -r requirements.txt && .venv/bin/python generate.py --out out --count 200 --seed 7
 
 up:
-	docker compose up -d --build db redis minio api worker maintenance web
+	docker compose up -d --build db redis api worker maintenance web
 	@for i in $$(seq 60); do curl -fs localhost:8000/health >/dev/null && break; sleep 2; done
 
 demo: synthetic/out/answer_key.json up

@@ -22,7 +22,8 @@ def checks() -> list[tuple[str, bool, str, bool]]:
         ("Object storage encrypted (SSE)", bool(s.s3_sse), "Set S3_SSE=AES256 (or aws:kms) and enable bucket default encryption", True),
         ("Object storage is AWS S3 in a US region", s.s3_endpoint_url in (None, "") and s.s3_region.startswith("us-"), "Unset S3_ENDPOINT_URL and use a us-* region", True),
         ("Inbound email secret changed", s.inbound_email_secret != "local-inbound-secret", "Set INBOUND_EMAIL_SECRET", True),
-        ("Storage credentials changed", s.s3_secret_key != "minioadmin", "Use real S3 credentials", True),
+        ("Files stored in S3, not Postgres", s.storage_backend == "s3", "Set STORAGE_BACKEND=s3", True),
+        ("Storage credentials set", bool(s.s3_access_key and s.s3_secret_key), "Set S3_ACCESS_KEY and S3_SECRET_KEY", True),
         ("Redact VIN/phone before sending to AI", s.ai_redact_before_send, "Optional: AI_REDACT_BEFORE_SEND=true", False),
     ]
 

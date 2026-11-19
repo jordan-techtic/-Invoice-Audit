@@ -202,7 +202,7 @@ def test_api_key_and_invoice_contents_never_appear_in_logs_or_responses(admin_cl
     logs = caplog.text
     assert CANARY_KEY not in logs and not any(CANARY_KEY in b for b in bodies)
     for secret in (s.jwt_secret, s.data_encryption_key, s.s3_secret_key):
-        assert secret not in logs
+        assert not secret or secret not in logs
     assert CANARY_SHOP not in logs and CANARY_VIN not in logs and "LOG-1" not in logs and "123456" not in logs
 
 

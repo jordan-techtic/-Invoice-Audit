@@ -1,36 +1,24 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Invoice audit: frontend
 
-## Getting Started
+Next.js app for analysts (upload, review, flags, reports). It holds no business logic and no secrets. The browser only
+talks to this app; the app proxies `/api/*` to the backend (`API_URL`, see `next.config.ts`). It can be developed, built and
+run without the rest of the repo as long as a backend answers at `API_URL`.
 
-First, run the development server:
+## Run
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+| | Command |
+|---|---|
+| Dev, no Docker | `npm install && API_URL=http://127.0.0.1:8000 npm run dev` (or `make dev`) |
+| Docker | start the backend first (`cd ../api && make up`), then `make up` here. Opens on http://localhost:3000 |
+| Backend somewhere else | `API_URL=http://host:8000 docker compose up -d --build` (the URL is baked in at build time) |
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo logins (backend seeds them): `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.com` / `analyst-password-123`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Contract with the backend
+- Everything goes through `src/lib/api.ts` (relative `/api/...` URLs). There is no other coupling to the backend code.
+- Uploads up to 25 MB; the proxy allows 30 MB (`proxyClientMaxBodySize`).
+- Auth is a cookie set by the backend on sign-in.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Test
+`make test` (Playwright). The backend must run with `AI_PROVIDER=fake FAKE_PROVIDER_DEMO=true`.
+Notes on the UI and design decisions: `NOTES.md`, `AGENTS.md`.

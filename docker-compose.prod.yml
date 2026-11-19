@@ -1,8 +1,9 @@
 # Production overrides:  docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-# Adds TLS (Caddy gets and renews a certificate automatically), turns off published DB/Redis/MinIO ports, and sets the
+# Adds TLS (Caddy gets and renews a certificate automatically), turns off published DB/Redis ports, and sets the
 # settings that `make config-check` lists. NOT exercised in this prototype's test environment.
 x-prod-env: &prod-env
   ENV: production
+  STORAGE_BACKEND: s3
   COOKIE_SECURE: "true"
   PUBLIC_BASE_URL: https://${DOMAIN:?set DOMAIN}
   S3_ENDPOINT_URL: ""            # use real AWS S3, US region, with default bucket encryption
@@ -32,7 +33,6 @@ services:
   web: { ports: !reset [] }
   db: { ports: !reset [] }
   redis: { ports: !reset [] }
-  minio: { profiles: ["local-only"], ports: !reset [] }
 
 volumes:
   caddy_data:

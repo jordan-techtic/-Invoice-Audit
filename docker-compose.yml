@@ -4,11 +4,7 @@ x-api-env: &api-env
   ENV: local
   DATABASE_URL: postgresql+psycopg://audit:audit@db:5432/audit
   REDIS_URL: redis://redis:6379/0
-  S3_ENDPOINT_URL: http://minio:9000
-  S3_BUCKET: invoice-audit
-  S3_ACCESS_KEY: minioadmin
-  S3_SECRET_KEY: minioadmin
-  S3_REGION: us-east-1
+  STORAGE_BACKEND: postgres   # uploaded files live in Postgres locally; production uses S3 (docker-compose.prod.yml)
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   AI_PROVIDER: ${AI_PROVIDER:-openai}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
@@ -49,24 +45,12 @@ services:
     image: redis:7-alpine
     ports: ["127.0.0.1:6380:6379"]
 
-  minio:
-    # Assumption: official minio/minio images are not pullable in this environment; chainguard/minio is a drop-in.
-    # The API creates the bucket on startup (app.storage.ensure_bucket).
-    image: chainguard/minio:latest
-    command: ["server", "/data", "--console-address", ":9001"]
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
-    volumes: [miniodata:/data]
-
   api:
     build: ./api
     environment: *api-env
     depends_on:
       db: { condition: service_healthy }
       redis: { condition: service_started }
-      minio: { condition: service_started }
     command: sh -c "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     ports: ["127.0.0.1:8000:8000"]
     healthcheck:
@@ -98,4 +82,3 @@ services:
 
 volumes:
   pgdata:
-  miniodata:

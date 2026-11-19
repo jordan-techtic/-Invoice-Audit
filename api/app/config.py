@@ -20,13 +20,13 @@ class Settings(BaseSettings):
     # Encryption key for raw model responses and other sensitive blobs (Fernet, base64 32 bytes)
     data_encryption_key: str = ""  # dev only; set DATA_ENCRYPTION_KEY in prod
 
-    # Object storage: s3 (MinIO/AWS) or postgres (blobs in stored_objects — no MinIO)
-    storage_backend: str = "s3"  # s3 | postgres
-    s3_endpoint_url: str | None = "http://localhost:9000"
+    # File storage: postgres (blobs in stored_objects; default, fine for local dev) or s3 (AWS S3, set for production)
+    storage_backend: str = "postgres"  # postgres | s3
+    s3_endpoint_url: str | None = None
     s3_region: str = "us-east-1"
     s3_bucket: str = "invoice-audit"
-    s3_access_key: str = "minioadmin"
-    s3_secret_key: str = "minioadmin"
+    s3_access_key: str = ""
+    s3_secret_key: str = ""
     s3_sse: str | None = None  # "AES256" or "aws:kms" in production
 
     # AI

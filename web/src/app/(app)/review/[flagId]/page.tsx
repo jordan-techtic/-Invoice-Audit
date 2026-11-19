@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
 import { api, apiUrl, dateTime, DISMISS_WORD, money, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagDetail } from "@/lib/api";
+import { useProgress } from "@/lib/progress";
 import NeedClient from "@/components/NeedClient";
 
 export default function FlagPage({ params }: { params: Promise<{ flagId: string }> }) {
@@ -55,6 +56,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
     setPanel(p);
   }, [d]);
 
+  const refreshProgress = useProgress()?.refresh;
   const go = useCallback((id: string | undefined) => router.push(id ? `/review/${id}` : "/review"), [router]);
   const idx = ids.indexOf(fid);
 
@@ -71,11 +73,12 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
     try {
       const x = await api.flagAction(cid, fid, action, body);
       setPanel(null);
+      refreshProgress?.();
       if (action === "reopen") { setD(x); idsRef.current = idsRef.current.includes(fid) ? idsRef.current : [...idsRef.current, fid]; setIds(idsRef.current); }
       else advance();
     } catch (e) { setError(e instanceof Error ? e.message : "That didn't save. Try again."); }
     finally { setBusy(false); }
-  }, [cid, fid, advance]);
+  }, [cid, fid, advance, refreshProgress]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -94,7 +97,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [d, busy, act, go, ids, idx, fid, openPanel]);
 
-  if (error && !d) return <p role="alert" className="text-danger">{error} <Link href="/review" className="text-primary underline underline-offset-4">Back to flags</Link></p>;
+  if (error && !d) return <p role="alert" className="text-danger">{error} <Link href="/review" className="btn-link">Back to flags</Link></p>;
   if (!d) return <p className="text-muted" role="status">Loading flag…</p>;
 
   const pg = d.invoice.pages[Math.min(page, d.invoice.pages.length - 1)];
@@ -104,7 +107,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
   return (
     <div>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <Link href="/review" className="text-primary underline underline-offset-4">Back to flags</Link>
+        <Link href="/review" className="btn-link">← Back to flags</Link>
         <p className="text-sm text-muted">
           <span className="num" data-testid="position">{idx >= 0 ? `${idx + 1} of ${ids.length} open flags` : `${ids.length} open flags`}</span>
           <span className="mx-2" aria-hidden>·</span>
@@ -118,12 +121,12 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               {d.invoice.pages.length > 1 ? (
                 <div className="flex items-center gap-2" role="group" aria-label="Page">
-                  <button className="btn-secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous page</button>
+                  <button className="btn-secondary btn-sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous page</button>
                   <span className="num">Page {page + 1} of {d.invoice.pages.length}</span>
-                  <button className="btn-secondary" disabled={page >= d.invoice.pages.length - 1} onClick={() => setPage(page + 1)}>Next page</button>
+                  <button className="btn-secondary btn-sm" disabled={page >= d.invoice.pages.length - 1} onClick={() => setPage(page + 1)}>Next page</button>
                 </div>
               ) : <span />}
-              <button className="btn-secondary" onClick={() => setZoom(!zoom)} aria-pressed={zoom}>{zoom ? "Fit to window" : "Zoom to 100%"}</button>
+              <button className="btn-secondary btn-sm" onClick={() => setZoom(!zoom)} aria-pressed={zoom}>{zoom ? "Fit to window" : "Zoom to 100%"}</button>
             </div>
             <div className="max-h-[70vh] min-h-[320px] overflow-auto bg-sunken p-3 min-[900px]:max-h-[calc(100vh-11rem)]">
               {pg ? (
@@ -153,9 +156,9 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
 
           {open ? (
             <div className="mt-6 grid gap-3">
-              <button className="btn-primary justify-between text-lg" style={{ minHeight: 56 }} disabled={busy} onClick={() => act("accept")}>Accept flag <kbd className="font-sans text-sm opacity-80">A</kbd></button>
-              <button className="btn-secondary justify-between text-lg" style={{ minHeight: 56 }} onClick={() => openPanel("dismiss")} aria-expanded={panel === "dismiss"}>Dismiss flag <kbd className="font-sans text-sm text-muted">D</kbd></button>
-              <button className="btn-secondary justify-between text-lg" style={{ minHeight: 56 }} onClick={() => openPanel("edit")} aria-expanded={panel === "edit"}>Edit flag <kbd className="font-sans text-sm text-muted">E</kbd></button>
+              <button className="btn-primary btn-lg justify-between" disabled={busy} onClick={() => act("accept")}>Accept flag <kbd className="font-sans text-sm opacity-80">A</kbd></button>
+              <button className="btn-secondary btn-lg justify-between" onClick={() => openPanel("dismiss")} aria-expanded={panel === "dismiss"}>Dismiss flag <kbd className="font-sans text-sm text-muted">D</kbd></button>
+              <button className="btn-secondary btn-lg justify-between" onClick={() => openPanel("edit")} aria-expanded={panel === "edit"}>Edit flag <kbd className="font-sans text-sm text-muted">E</kbd></button>
             </div>
           ) : (
             <p className={`mt-6 border-l-4 px-3 py-3 ${d.status === "dismissed" ? "border-dismissed bg-dismissed-soft" : "border-confirmed bg-confirmed-soft"}`} data-testid="flag-status">
@@ -163,7 +166,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
               {d.status === "dismissed" && d.dismiss_reason ? `: ${DISMISS_WORD[d.dismiss_reason]}` : ""}
               {d.reviewed_by ? ` by ${d.reviewed_by}` : ""}{d.reviewed_at ? ` on ${dateTime(d.reviewed_at)}` : ""}.
               {d.note ? <span className="block text-muted">Note: {d.note}</span> : null}
-              <button className="ml-0 mt-1 block min-h-[44px] text-primary underline underline-offset-4" onClick={() => act("reopen")} disabled={busy}>Undo</button>
+              <button className="btn-secondary btn-sm mt-2" onClick={() => act("reopen")} disabled={busy}>Undo</button>
             </p>
           )}
 
@@ -182,7 +185,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
               <label htmlFor="dnote" className="mb-1 mt-3 block text-sm font-medium">Note (optional)</label>
               <textarea id="dnote" className="field py-2" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
               <div className="mt-3 flex gap-3">
-                <button type="submit" className="btn-secondary" disabled={!reason || busy}>Dismiss flag</button>
+                <button type="submit" className="btn-primary" disabled={!reason || busy}>Dismiss flag</button>
                 <button type="button" className="btn-secondary" onClick={() => setPanel(null)}>Cancel</button>
               </div>
             </form>
@@ -203,7 +206,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
           )}
 
           <h2 className="mt-10 text-lg">Invoice {d.invoice.invoice_number}</h2>
-          <p className="mt-1"><Link href={`/invoices/${d.invoice.id}`} className="text-primary underline underline-offset-4">Fix extracted fields</Link></p>
+          <p className="mt-1"><Link href={`/invoices/${d.invoice.id}`} className="btn-secondary btn-sm">Fix extracted fields</Link></p>
           <div className="mt-3 overflow-x-auto bg-surface">
             <table className="w-full min-w-[520px] border-collapse">
               <caption className="sr-only">Invoice lines</caption>

@@ -14,7 +14,10 @@ test("upload three invoices, fix the odometer, mark as checked", async ({ page }
   await expect(page.getByRole("heading", { name: "Clients" })).toBeVisible();
   await page.getByRole("button", { name: "Work on Lone Prairie Freight" }).click();
   await expect(page.getByTestId("active-client")).toHaveText("Lone Prairie Freight");
+  await expect(page.getByRole("heading", { name: "Audit overview" })).toBeVisible();
+  await expect(page.getByTestId("step-bar")).toBeVisible();
 
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Upload" }).click();
   await expect(page.getByRole("heading", { name: "Upload invoices" })).toBeVisible();
   await page.locator("#file-input").setInputFiles(files);
 
@@ -24,11 +27,11 @@ test("upload three invoices, fix the odometer, mark as checked", async ({ page }
     await expect(row.getByText("Needs review", { exact: false }).first()).toBeVisible({ timeout: 60_000 });
   }
   await expect(page.locator('tr[data-status="queued"], tr[data-status="reading"]')).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Review invoices" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Check invoices" }).first()).toBeVisible();
 
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Review" }).click();
   await page.getByRole("navigation", { name: "Review sections" }).getByRole("link", { name: "Invoices" }).click();
-  await page.getByLabel("Show").selectOption("needs_review");
+  await page.getByRole("tab", { name: /To check/ }).click();
   await page.getByRole("link").filter({ hasText: /./ }).and(page.locator("tbody a")).first().click();
 
   const odometer = page.getByLabel("Odometer", { exact: true });
@@ -40,4 +43,5 @@ test("upload three invoices, fix the odometer, mark as checked", async ({ page }
 
   await page.getByRole("button", { name: "Mark as checked" }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Checked");
+  await expect(page.getByTestId("next-invoice")).toBeVisible();
 });

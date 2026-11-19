@@ -2,7 +2,7 @@
 
 ```
 Browser (Next.js)  --/api proxy-->  FastAPI  --> PostgreSQL (all data, client_id on every table)
-                                       |------> S3 / MinIO  (clients/<id>/ raw files + page images; reports/<id>/ PDFs)
+                                       |------> S3 in prod, Postgres locally  (clients/<id>/ raw files + page images; reports/<id>/ PDFs)
                                        |------> Redis + RQ  (queues: extraction, flags, maintenance)
                                        '------> AI provider (OpenAI default, Claude optional) via ExtractionProvider
 Worker (RQ)  : process_upload, run_flags          Maintenance loop : raw-file retention

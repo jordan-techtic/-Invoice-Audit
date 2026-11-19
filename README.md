@@ -7,7 +7,7 @@ kept separate per client. Internal tool for Techtic Solutions; clients do not lo
 ## Quick start
 ```bash
 cp .env.example .env            # add OPENAI_API_KEY and, once confirmed with the provider, AI_ZDR_CONFIRMED=true
-docker compose up -d --build    # db, redis, minio, api, worker, maintenance, web
+docker compose up -d --build    # db, redis, api, worker, maintenance, web
 open http://localhost:3000      # sign in: admin@audit-demo.com / admin-password-123  (demo accounts, change them)
 ```
 With no key set, start the stack offline instead: `AI_PROVIDER=fake docker compose up -d --build` (the API refuses to start
@@ -19,16 +19,27 @@ creates the report and PDF (`demo/sample_report.pdf`) and prints the numbers. Wi
 **Without a key it uses an offline oracle that replays the answer key with injected errors; everything after reading is real,
 but the reading accuracy it reports is not a model result.**
 
+## Backend and frontend run independently
+`api/` (FastAPI, worker, db, redis) and `web/` (Next.js) each have their own `docker-compose.yml`, `Makefile`,
+`.env.example` and README. The only link is HTTP: the frontend proxies `/api/*` to `API_URL`.
+```bash
+cd api && make up      # backend alone on :8000 (creates the shared `invoice-audit` Docker network)
+cd web && make up      # frontend alone on :3000, talks to api:8000 on that network
+cd web && make dev     # or: no Docker, Next dev server against any backend (API_URL=...)
+```
+The root `docker-compose.yml` still starts everything together (`docker compose up -d --build`). Use either the root
+stack or the separate ones, not both at once: they publish the same ports.
+
 ## Local without Docker
 
 PostgreSQL, Node.js, and Python 3.11+ on the host. With `QUEUE_INLINE=true` you do not need Redis or an RQ worker. Set
-`STORAGE_BACKEND=postgres` in `api/.env` to keep uploaded files in the database (no MinIO).
+`STORAGE_BACKEND=postgres` in `api/.env` to keep uploaded files in the database (the default).
 
 1. **Database** — create role `audit` / password `audit` and databases `audit` and `audit_test` (see `infra/postgres-init.sql`).
    If port 5433 is in use, point `DATABASE_URL` at 5432 in `api/.env`.
 2. **API** — `cp api/.env.example api/.env`, then `./scripts/dev-local.sh` (or follow the manual steps inside the script).
 3. **Web** — `cd web && npm install && API_URL=http://127.0.0.1:8000 npm run dev`. With `AUTH_DISABLED=true` in `api/.env`, no sign-in screen (acts as admin).
-4. **File storage** — default in `api/.env.example` is `STORAGE_BACKEND=postgres`. Use MinIO only if you set `STORAGE_BACKEND=s3`.
+4. **File storage** — `STORAGE_BACKEND=postgres` (default): files are kept in the database. Production uses `STORAGE_BACKEND=s3` with real AWS S3.
 
 Demo logins: `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.com` / `analyst-password-123`.
 

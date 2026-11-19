@@ -395,7 +395,7 @@ class Report(IdMixin, ClientScoped, Base):
 
 
 class StoredObject(Base):
-    """Raw files and derived page images when STORAGE_BACKEND=postgres (local dev without MinIO/S3)."""
+    """Raw files and derived page images when STORAGE_BACKEND=postgres (local dev, no object store needed)."""
 
     __tablename__ = "stored_objects"
     key: Mapped[str] = mapped_column(String(500), primary_key=True)

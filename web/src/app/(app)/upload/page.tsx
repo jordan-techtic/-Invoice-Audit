@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, shortDate, uploadFile, type UploadRow } from "@/lib/api";
 import NeedClient from "@/components/NeedClient";
 import { IconFile } from "@/components/Icons";
+import { useProgress } from "@/lib/progress";
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const EXT = ["pdf", "jpg", "jpeg", "png", "heic", "heif"];
@@ -22,6 +23,11 @@ const STATUS: Record<UploadRow["status"], string> = {
   queued: "Queued", reading: "Reading", needs_review: "Needs review", done: "Done", failed: "Failed", duplicate: "Skipped (duplicate)",
 };
 
+const PILL: Record<UploadRow["status"], string> = {
+  queued: "bg-sunken text-muted", reading: "bg-sunken text-ink", needs_review: "bg-amber-soft text-ink", done: "bg-confirmed-soft text-confirmed",
+  failed: "bg-[#fdecea] text-danger", duplicate: "bg-dismissed-soft text-dismissed",
+};
+
 export default function UploadPage() {
   return <NeedClient>{(c) => <Upload cid={c.id} />}</NeedClient>;
 }
@@ -33,11 +39,12 @@ function Upload({ cid }: { cid: string }) {
   const [rowError, setRowError] = useState<Record<string, string>>({});
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
+  const refreshProgress = useProgress()?.refresh;
 
   const reload = useCallback(async () => {
-    try { setRows(await api.uploads(cid)); setLoadError(null); }
+    try { setRows(await api.uploads(cid)); setLoadError(null); refreshProgress?.(); }
     catch (e) { setLoadError(e instanceof Error ? e.message : "Couldn't load your files. Refresh the page."); }
-  }, [cid]);
+  }, [cid, refreshProgress]);
 
   useEffect(() => { setRows(null); reload(); }, [reload]);
 
@@ -82,10 +89,22 @@ function Upload({ cid }: { cid: string }) {
   }
 
   const empty = rows !== null && rows.length === 0 && local.length === 0;
+  const all = rows ?? [];
+  const count = (st: UploadRow["status"][]) => all.filter((r) => st.includes(r.status)).length;
+  const invoicesFound = all.reduce((n, r) => n + (r.invoice_count ?? 0), 0);
+  const summary = [
+    { label: "Files", value: all.length },
+    { label: "Being read", value: count(["queued", "reading"]) },
+    { label: "Read", value: count(["done", "needs_review"]) },
+    { label: "Invoices found", value: invoicesFound },
+    { label: "Duplicates skipped", value: count(["duplicate"]) },
+    { label: "Failed", value: count(["failed"]) },
+  ];
 
   return (
     <div>
-      <h1 className="text-xl">Upload invoices</h1>
+      <h1 className="text-xl">Step 1 · Upload invoices</h1>
+      <p className="mt-1 max-w-prose text-muted">Add every repair invoice for this client. The AI reads each page; when a file shows <b>Needs review</b>, go to step 2 and check it.</p>
 
       <div
         className={`relative mt-6 ${over ? "bg-sunken" : "bg-surface"} border-2 border-dashed border-line-strong`}
@@ -107,17 +126,29 @@ function Upload({ cid }: { cid: string }) {
 
       {loadError && <p role="alert" className="mt-6 text-danger">{loadError}</p>}
 
+      {all.length > 0 && (
+        <dl className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6" aria-label="Upload summary">
+          {summary.map((x) => (
+            <div key={x.label} className={`card py-3 ${x.label === "Failed" && x.value ? "border-danger" : ""}`}>
+              <dt className="kpi-label">{x.label}</dt>
+              <dd className={`num mt-1 text-xl font-bold ${x.label === "Failed" && x.value ? "text-danger" : ""}`}>{x.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
       {empty ? (
         <p className="mt-8 max-w-prose text-lg">No invoices yet. Drop files here to start the audit.</p>
       ) : (
         rows !== null && (
-          <div className="mt-8 overflow-x-auto bg-surface">
+          <div className="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
             <table className="w-full min-w-[640px] border-collapse">
               <caption className="sr-only">Uploaded files</caption>
               <thead>
                 <tr>
                   <th scope="col" className="th">File</th>
                   <th scope="col" className="th text-right">Pages</th>
+                  <th scope="col" className="th text-right">Invoices</th>
                   <th scope="col" className="th">Status</th>
                   <th scope="col" className="th"><span className="sr-only">Action</span></th>
                 </tr>
@@ -127,11 +158,12 @@ function Upload({ cid }: { cid: string }) {
                   <tr key={l.key} className="tr">
                     <td className="td font-medium break-all">{l.name}</td>
                     <td className="td" />
+                    <td className="td" />
                     <td className="td" colSpan={2}>
                       {l.error ? (
                         <div className="flex items-start justify-between gap-4">
                           <p className="text-danger" role="alert"><span className="font-medium">Not uploaded.</span> {l.error}</p>
-                          <button className="btn-secondary shrink-0" onClick={() => setLocal((p) => p.filter((x) => x.key !== l.key))}>Dismiss</button>
+                          <button className="btn-secondary btn-sm shrink-0" onClick={() => setLocal((p) => p.filter((x) => x.key !== l.key))}>Dismiss</button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-3">
@@ -153,15 +185,15 @@ function Upload({ cid }: { cid: string }) {
                       <span className="block text-sm font-normal text-muted">Added {shortDate(r.created_at)}</span>
                     </td>
                     <td className="td num text-right">{r.page_count ?? ""}</td>
+                    <td className="td num text-right">{r.invoice_count ?? ""}</td>
                     <td className="td">
-                      <span className={`font-medium ${r.status === "failed" ? "text-danger" : ""}`}>{STATUS[r.status]}</span>
-                      {r.status === "needs_review" && r.invoice_count ? <span className="num text-muted"> ({r.invoice_count} {r.invoice_count === 1 ? "invoice" : "invoices"})</span> : null}
+                      <span className={`inline-flex rounded-full px-2.5 py-0.5 text-sm font-medium ${PILL[r.status]}`}>{STATUS[r.status]}</span>
                       {r.status_detail && <span className={`block text-sm ${r.status === "failed" ? "text-danger" : "text-muted"}`}>{r.status_detail}</span>}
                       {rowError[r.id] && <span role="alert" className="block text-sm text-danger">{rowError[r.id]}</span>}
                     </td>
-                    <td className="td text-right">
-                      {r.status === "failed" && <button className="btn-secondary" onClick={() => retry(r.id)}>Retry</button>}
-                      {r.status === "needs_review" && <Link href="/invoices?status=needs_review" className="font-medium text-primary underline underline-offset-4">Review invoices</Link>}
+                    <td className="td whitespace-nowrap text-right">
+                      {r.status === "failed" && <button className="btn-secondary btn-sm" onClick={() => retry(r.id)}>Retry</button>}
+                      {r.status === "needs_review" && <Link href="/invoices?status=needs_review" className="btn-primary btn-sm">Check invoices</Link>}
                     </td>
                   </tr>
                 ))}

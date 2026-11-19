@@ -1,4 +1,4 @@
-"""Object storage: S3/MinIO in production, optional PostgreSQL blobs for local dev."""
+"""File storage: PostgreSQL blobs by default (local dev), AWS S3 in production (STORAGE_BACKEND=s3)."""
 
 from __future__ import annotations
 

@@ -19,7 +19,7 @@ What is done, what is configured but untested, and what is not done. A proof of 
 
 ## Configured but not verified here
 - **Zero data retention / no training** with the AI provider is an agreement, not a switch. `AI_ZDR_CONFIRMED=true` records that it was arranged; until then the AI provider classes refuse to run. Nothing here proves the provider honours it.
-- **Encryption at rest:** the S3 bucket must have default encryption (SSE) and `S3_SSE` set; MinIO locally is not encrypted. **TLS:** `docker-compose.prod.yml` puts a TLS-terminating proxy in front; not exercised in this environment.
+- **Encryption at rest:** the S3 bucket must have default encryption (SSE) and `S3_SSE` set; the local Postgres file store is not encrypted separately. **TLS:** `docker-compose.prod.yml` puts a TLS-terminating proxy in front; not exercised in this environment.
 
 ## Not done
 - No SSO, MFA, password reset flow or account lockout beyond the rate limit; the rate limiter is in memory (one API process).

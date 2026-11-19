@@ -13,7 +13,7 @@ test("review flags with keyboard shortcuts", async ({ page, request }) => {
   await expect(page.getByRole("heading", { name: "Flags to review" }).or(page.getByRole("link", { name: "Flags to review" }))).toBeVisible();
   await expect(page.getByTestId("hero")).not.toHaveText("$0.00");
 
-  await page.locator("tbody tr").first().getByRole("link").click();
+  await page.locator("tbody tr").first().getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(/\/review\/[0-9a-f-]+$/);
   await expect(page.getByTestId("key-hint")).toContainText("A accept");
   await expect(page.getByTestId("position")).toContainText(/1 of \d+ open flags/);

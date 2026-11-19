@@ -6,7 +6,8 @@ import { api, apiUrl, type FieldState, type InvoiceDetail, type InvoiceLine } fr
 import NeedClient from "@/components/NeedClient";
 import StatusMark from "@/components/StatusMark";
 import FieldInput, { display } from "@/components/FieldInput";
-import { IconAlert } from "@/components/Icons";
+import { IconAlert, IconArrow } from "@/components/Icons";
+import { useProgress } from "@/lib/progress";
 
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -45,6 +46,8 @@ function Detail({ cid, id }: { cid: string; id: string }) {
   const [edited, setEdited] = useState(false);
   const [recheck, setRecheck] = useState<{ busy?: boolean; text?: string; error?: string }>({});
   const pending = useRef<Set<Promise<unknown>>>(new Set());
+  const [nextId, setNextId] = useState<string | null | undefined>(undefined); // undefined = not looked up yet
+  const refreshProgress = useProgress()?.refresh;
 
   const load = useCallback(async () => {
     try { setData(await api.invoice(cid, id)); setError(null); }
@@ -88,6 +91,9 @@ function Detail({ cid, id }: { cid: string; id: string }) {
       await Promise.allSettled([...pending.current]);
       await api.markChecked(cid, id);
       await load();
+      const left = await api.invoices(cid, "needs_review").catch(() => []);
+      setNextId(left.find((r) => r.id !== id)?.id ?? null);
+      refreshProgress?.();
     } catch (e) {
       setMarkError(e instanceof Error ? e.message : "Couldn't mark this invoice as checked. Try again.");
     } finally {
@@ -95,7 +101,7 @@ function Detail({ cid, id }: { cid: string; id: string }) {
     }
   }
 
-  if (error) return <p role="alert" className="text-danger">{error} <Link href="/invoices" className="text-primary underline underline-offset-4">Back to invoices</Link></p>;
+  if (error) return <p role="alert" className="text-danger">{error} <Link href="/invoices" className="btn-link">Back to invoices</Link></p>;
   if (!data) return <p className="text-muted" role="status">Loading invoice…</p>;
 
   const toCheck = [...Object.values(data.header), ...data.lines.flatMap((l) => Object.values(l).filter((v): v is FieldState => typeof v === "object" && v !== null))]
@@ -104,18 +110,19 @@ function Detail({ cid, id }: { cid: string; id: string }) {
   const pg = data.pages[Math.min(page, data.pages.length - 1)];
 
   return (
+    <div>
     <div className="grid gap-8 min-[900px]:grid-cols-[3fr_2fr]">
       <section aria-label="Original invoice page" className="min-w-0">
         <div className="top-6 min-[900px]:sticky">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             {data.pages.length > 1 ? (
               <div className="flex items-center gap-2" role="group" aria-label="Page">
-                <button className="btn-secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous page</button>
+                <button className="btn-secondary btn-sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Previous page</button>
                 <span className="num">Page {page + 1} of {data.pages.length}</span>
-                <button className="btn-secondary" disabled={page >= data.pages.length - 1} onClick={() => setPage(page + 1)}>Next page</button>
+                <button className="btn-secondary btn-sm" disabled={page >= data.pages.length - 1} onClick={() => setPage(page + 1)}>Next page</button>
               </div>
             ) : <span className="text-muted">{data.source_filename}</span>}
-            <button className="btn-secondary" onClick={() => setZoom(!zoom)} aria-pressed={zoom}>{zoom ? "Fit to window" : "Zoom to 100%"}</button>
+            <button className="btn-secondary btn-sm" onClick={() => setZoom(!zoom)} aria-pressed={zoom}>{zoom ? "Fit to window" : "Zoom to 100%"}</button>
           </div>
           <div className="max-h-[70vh] min-[900px]:max-h-[calc(100vh-9rem)] min-h-[320px] overflow-auto bg-sunken p-3">
             {pg ? (
@@ -132,7 +139,7 @@ function Detail({ cid, id }: { cid: string; id: string }) {
       </section>
 
       <section aria-label="Extracted fields" className="min-w-0">
-        <Link href="/invoices" className="text-primary underline underline-offset-4">Back to invoices</Link>
+        <Link href="/invoices?status=needs_review" className="btn-link">← Back to invoices</Link>
         <h1 className="mt-3 text-xl">Invoice {display("invoice_number", data.header.invoice_number?.value ?? null) || "without a number"}</h1>
         <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
           <span data-testid="review-status"><StatusMark status={data.review_status} /></span>
@@ -142,11 +149,11 @@ function Detail({ cid, id }: { cid: string; id: string }) {
         {edited && (
           <div className="mt-5 border-l-4 border-primary bg-surface px-4 py-3" data-testid="recheck-banner">
             {recheck.text ? (
-              <p>{recheck.text}. <Link href="/review" className="font-medium text-primary underline underline-offset-4">Back to flags to review</Link></p>
+              <p>{recheck.text}. <Link href="/review" className="btn-link">Back to flags to review</Link></p>
             ) : (
               <>
                 <p className="mb-2">Your changes are saved. Re-check this invoice to update its flags.</p>
-                <button className="btn-secondary" onClick={runRecheck} disabled={recheck.busy}>{recheck.busy ? "Re-checking…" : "Re-check this invoice"}</button>
+                <button className="btn-secondary btn-sm" onClick={runRecheck} disabled={recheck.busy}>{recheck.busy ? "Re-checking…" : "Re-check this invoice"}</button>
                 {recheck.error && <p role="alert" className="mt-2 text-danger">{recheck.error}</p>}
               </>
             )}
@@ -154,9 +161,23 @@ function Detail({ cid, id }: { cid: string; id: string }) {
         )}
 
         <div className="mt-5">
-          <button className="btn-primary w-full text-lg" style={{ minHeight: 56 }} onClick={markChecked} disabled={checked || marking}>
-            {checked ? "Checked" : marking ? "Marking…" : "Mark as checked"}
-          </button>
+          {checked && nextId !== undefined ? (
+            <div className="rounded-md border border-confirmed bg-confirmed-soft p-4" data-testid="next-invoice">
+              <p className="font-bold text-confirmed">Invoice checked.</p>
+              {nextId ? (
+                <Link href={`/invoices/${nextId}`} className="btn-primary btn-lg mt-3 w-full">Check next invoice<IconArrow /></Link>
+              ) : (
+                <>
+                  <p className="mt-1">That was the last invoice to check. Next: run the audit checks.</p>
+                  <Link href="/review?run=1" className="btn-primary btn-lg mt-3 w-full">Go to step 3 · Run checks<IconArrow /></Link>
+                </>
+              )}
+            </div>
+          ) : (
+            <button className="btn-primary btn-lg w-full" onClick={markChecked} disabled={checked || marking}>
+              {checked ? "Checked" : marking ? "Marking…" : "Mark as checked"}
+            </button>
+          )}
           {markError && <p role="alert" className="mt-2 text-danger">{markError}</p>}
           {!checked && toCheck > 0 && <p className="mt-2 text-sm text-muted">Fix or confirm the fields marked Check, then mark this invoice as checked.</p>}
         </div>
@@ -169,14 +190,20 @@ function Detail({ cid, id }: { cid: string; id: string }) {
           ))}
         </div>
 
-        <h2 className="mt-10 text-lg">Line items</h2>
+      </section>
+    </div>
+      <section aria-label="Line items" className="mt-10">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 className="text-lg">Line items</h2>
+          <p className="text-sm text-muted">{data.lines.length} {data.lines.length === 1 ? "line" : "lines"} · fields marked Check need a look</p>
+        </div>
         {data.lines.length === 0 ? <p className="mt-2 text-muted">No line items were read from this invoice.</p> : (
-          <div className="mt-3 overflow-x-auto bg-surface">
-            <table className="w-full min-w-[760px] border-collapse">
+          <div className="mt-3 overflow-x-auto rounded-lg border border-line bg-surface">
+            <table className="w-full min-w-[900px] border-collapse">
               <caption className="sr-only">Line items</caption>
               <thead>
                 <tr>
-                  <th scope="col" className="th w-[250px] min-w-[250px]">Description</th>
+                  <th scope="col" className="th min-w-[280px]">Description</th>
                   {LINE_COLS.map((c) => <th key={c.field} scope="col" className={`th ${c.field !== "part_number" ? "text-right" : ""}`}>{c.label}</th>)}
                 </tr>
               </thead>
@@ -207,7 +234,7 @@ function LineRow({ line, onSave }: { line: InvoiceLine; onSave: (field: string, 
           ) : (
             <p className="whitespace-nowrap">
               Job type: <span className="num text-ink">{code?.value ?? "not set"}</span>{" "}
-              <button className="min-h-[32px] text-primary underline underline-offset-4" onClick={() => setEditCode(true)} aria-label={`Edit job type, line ${n}`}>Edit</button>
+              <button className="btn-link min-h-[32px]" onClick={() => setEditCode(true)} aria-label={`Edit job type, line ${n}`}>Edit</button>
               {code?.needs_review && <span className="ml-2 inline-flex items-center gap-1 font-bold text-ink"><IconAlert />Check</span>}
             </p>
           )}
