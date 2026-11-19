@@ -2,8 +2,6 @@ import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { makePng } from "./png";
 
 export async function apiLogin(request: APIRequestContext) {
-  const res = await request.post("/api/auth/login", { data: { email: "admin@audit-demo.com", password: "admin-password-123" } });
-  expect(res.ok()).toBeTruthy();
   const clients = await (await request.get("/api/clients")).json();
   const cid: string = clients.find((c: { name: string }) => c.name === "Lone Prairie Freight").id;
   return cid;
@@ -41,10 +39,7 @@ export async function ensureFlags(request: APIRequestContext, cid: string) {
 }
 
 export async function uiLogin(page: Page) {
-  await page.goto("/login");
-  await page.getByLabel("Email").fill("admin@audit-demo.com");
-  await page.getByLabel("Password").fill("admin-password-123");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto("/clients");
   await page.getByRole("button", { name: "Work on Lone Prairie Freight" }).click();
   await expect(page.getByTestId("active-client")).toHaveText("Lone Prairie Freight");
 }

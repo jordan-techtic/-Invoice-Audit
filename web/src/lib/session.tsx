@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { api, setUnauthorizedHandler, type Client, type User } from "./api";
+import { api, type Client, type User } from "./api";
 
 interface Session {
   user: User;
@@ -27,7 +27,6 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setUnauthorizedHandler(() => { window.location.href = "/clients"; });
     let live = true;
     (async () => {
       try {
@@ -39,11 +38,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         setClientId(list.some((c) => c.id === saved) ? saved : null);
         setUser(me);
-      } catch (e) {
-        if (live) setError(e instanceof Error ? e.message : "Could not load session");
+      } catch (err) {
+        if (live) setError(err instanceof Error ? err.message : "Couldn't load the app.");
       }
     })();
-    return () => { live = false; setUnauthorizedHandler(null); };
+    return () => { live = false; };
   }, []);
 
   const chooseClient = useCallback((c: Client) => {

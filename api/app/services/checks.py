@@ -65,15 +65,42 @@ def normalise_and_check(
     for k in ("subtotal", "tax", "total"):
         h[k].value = N.parse_money(h[k].value)
 
+    # values that cannot fit their database columns are treated as unreadable, never allowed to fail the invoice
+    for k in ("unit_number", "invoice_number"):
+        v = h[k].value
+        if v is not None and len(v) > (50 if k == "unit_number" else 80):
+            h[k].value, h[k].note = v[: 50 if k == "unit_number" else 80], "Check this: this value was unusually long and was cut short."
+            h[k].confidence, h[k].failed_check = min(h[k].confidence, 0.4), True
+    for k in ("subtotal", "tax", "total"):
+        if h[k].value is not None and abs(h[k].value) >= Decimal("10000000000"):
+            h[k].value = None
+            _lower(h[k], 0.2, "Check this: couldn't be read as a valid amount.")
+
     # unparseable value that the model did report: ask a human
     for k, orig in (("invoice_date", merged_header["invoice_date"]["value"]), ("odometer", merged_header["odometer"]["value"])):
         if orig is not None and h[k].value is None:
             _lower(h[k], 0.3, "Check this: couldn't be read as a valid value.")
 
     vin, vstatus = N.normalize_vin(merged_header["vin"]["value"])
+    # a short all-digit "VIN" is almost always the odometer read into the wrong field
+    if vstatus == "bad_length" and vin and vin.isdigit() and 4 <= len(vin) <= 7 and h["odometer"].value is None:
+        h["odometer"].value = N.parse_odometer(vin)
+        h["odometer"].confidence = min(h["vin"].confidence, 0.5)
+        h["odometer"].failed_check = True
+        h["odometer"].note = "Check this: this number was read in the VIN position, so it is probably the odometer."
+        h["vin"].value, h["vin"].confidence, vin, vstatus = None, 0.0, None, "missing"
     h["vin"].value = vin
     if vstatus == "bad_length":
-        _lower(h["vin"], 0.4, "Check this: a VIN has 17 characters and this one doesn't.")
+        raw = vin or ""
+        window = next((raw[i:i + 17] for i in range(len(raw) - 16) if N.vin_check_digit_ok(raw[i:i + 17])), None) if len(raw) > 17 else None
+        if window:                                   # extra characters around a valid VIN (labels, spaces, a stray digit)
+            h["vin"].value = window
+            h["vin"].confidence = min(h["vin"].confidence, 0.6)
+            h["vin"].failed_check = True
+            h["vin"].note = f"Check this: the VIN was read with {len(raw)} characters; we kept the 17 that form a valid VIN."
+        else:
+            h["vin"].value = raw if len(raw) <= 17 else None   # never store more than a VIN column holds
+            _lower(h["vin"], 0.4, f"Check this: a VIN has 17 characters and this one was read as {len(raw)}" + (f" ({raw[:40]})." if len(raw) > 17 else "."))
         failed.append("vin_length")
     elif vstatus == "bad_check":
         _lower(h["vin"], 0.5, "Check this: the VIN's check digit doesn't match, so a character is probably misread.")
@@ -96,6 +123,11 @@ def normalise_and_check(
             ln[k].value = N.parse_money(ln[k].value)
         for k in ("qty", "labour_hours"):
             ln[k].value = N.parse_number(ln[k].value)
+        for k, limit in (("parts_price", 10**10), ("labour_rate", 10**10), ("line_total", 10**10), ("qty", 10**8), ("labour_hours", 10**6)):
+            if ln[k].value is not None and abs(ln[k].value) >= limit:
+                ln[k].value = None
+                _lower(ln[k], 0.2, "Check this: couldn't be read as a valid number.")
+        ln["part_number"].value = ln["part_number"].value[:80] if ln["part_number"].value else None
         lines.append(ln)
 
     # ---- per-line arithmetic. Shops print "parts price" either per unit or already multiplied by qty,

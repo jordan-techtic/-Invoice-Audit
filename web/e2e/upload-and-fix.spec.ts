@@ -9,10 +9,7 @@ test("upload three invoices, fix the odometer, mark as checked", async ({ page }
     buffer: makePng(stamp % 100000 + i * 7919),
   }));
 
-  await page.goto("/login");
-  await page.getByLabel("Email").fill("admin@audit-demo.com");
-  await page.getByLabel("Password").fill("admin-password-123");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto("/clients");
 
   await expect(page.getByRole("heading", { name: "Clients" })).toBeVisible();
   await page.getByRole("button", { name: "Work on Lone Prairie Freight" }).click();

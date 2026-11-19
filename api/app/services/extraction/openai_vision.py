@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import time
 
 from ...config import Settings
@@ -11,6 +12,8 @@ from .base import ExtractionError, ExtractionProvider, RawResponse, Usage
 from .claude import CLASSIFY_SCHEMA
 from .schema import tool_input_schema
 from .schema_explain import EXPLAIN_SCHEMA, NARRATIVE_SCHEMA
+
+log = logging.getLogger("audit.openai")  # error types and codes only, never content
 
 _DROP = {"default", "title", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum", "minLength", "maxLength"}
 
@@ -46,19 +49,31 @@ class OpenAIVisionProvider(ExtractionProvider):
             raise ExtractionError("OPENAI_API_KEY is not set. Add it to .env and restart the worker.")
         from openai import OpenAI
 
-        self._client = OpenAI(api_key=settings.openai_api_key, max_retries=3)
+        self._client = OpenAI(api_key=settings.openai_api_key, max_retries=8, timeout=180)  # the SDK backs off and honours Retry-After
         self.model = settings.openai_model
         self.retries = settings.extraction_retries
         self._page_schema = strictify(tool_input_schema())
 
     def _call(self, system: str, user_content: list[dict], schema_name: str, schema: dict) -> RawResponse:
+        import openai
+
         t0 = time.monotonic()
-        resp = self._client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "system", "content": system}, {"role": "user", "content": user_content}],
-            response_format={"type": "json_schema", "json_schema": {"name": schema_name, "strict": True, "schema": schema}},
-            temperature=0,
-        )
+        try:
+            resp = self._client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "system", "content": system}, {"role": "user", "content": user_content}],
+                response_format={"type": "json_schema", "json_schema": {"name": schema_name, "strict": True, "schema": schema}},
+                temperature=0,
+            )
+        except openai.RateLimitError as e:
+            code = (getattr(e, "body", None) or {}).get("code") if isinstance(getattr(e, "body", None), dict) else None
+            log.warning("openai rate limit: code=%s", code)
+            if code == "insufficient_quota":
+                raise ExtractionError("The OpenAI account is out of credit or over its spending limit. Add credit in the OpenAI billing page, then use Retry.") from None
+            raise ExtractionError("The AI service is busy and refused the request after several tries. Wait a few minutes, then use Retry.") from None
+        except (openai.APIConnectionError, openai.APITimeoutError, openai.InternalServerError) as e:
+            log.warning("openai unavailable: %s", type(e).__name__)
+            raise ExtractionError("The AI service could not be reached or timed out. Check the connection, then use Retry.") from None
         text = resp.choices[0].message.content or ""
         u = resp.usage
         return RawResponse(text, Usage(u.prompt_tokens, u.completion_tokens, int((time.monotonic() - t0) * 1000)))

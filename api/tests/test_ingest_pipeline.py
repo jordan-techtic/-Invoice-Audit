@@ -176,3 +176,12 @@ def test_email_inbound_uses_same_pipeline(world):
     r = c.post(f"/inbound/email/{token}", json=body, headers={"X-Inbound-Secret": "local-inbound-secret"})
     assert r.status_code == 200 and r.json()["results"][0]["upload"]["source"] == "email"
     assert c.post("/inbound/email/nope", json=body, headers={"X-Inbound-Secret": "local-inbound-secret"}).status_code == 404
+
+
+def test_a_wild_vin_from_the_model_never_fails_the_whole_upload(admin_client, world):
+    script(page_json(inv="WILD-1", vin="V" * 30, odo="412,880"))
+    up = post(admin_client, world["a"], ("wild.png", png_bytes(seed=8801), "image/png")).json()[0]["upload"]
+    assert up["status"] == "needs_review" and up["invoice_count"] == 1          # not 'failed'
+    inv = next(i for i in admin_client.get(f"/clients/{world['a']}/invoices").json() if i["invoice_number"] == "WILD-1")
+    d = admin_client.get(f"/clients/{world['a']}/invoices/{inv['id']}").json()
+    assert d["header"]["vin"]["value"] is None and d["header"]["vin"]["needs_review"] and "read as 30" in d["header"]["vin"]["note"]

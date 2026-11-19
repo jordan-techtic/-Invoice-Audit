@@ -1,0 +1,119 @@
+{
+  "mode": "real_ai",
+  "files": 199,
+  "invoices": 193,
+  "invoices_expected": 193,
+  "exact_duplicates_skipped": "4/4",
+  "failed_files": 11,
+  "split_correct_pct": 100.0,
+  "field_accuracy_pct": 91.5,
+  "fields_compared": 6704,
+  "per_field_accuracy_pct": {
+    "shop_name": 98.96,
+    "shop_address": 88.08,
+    "invoice_number": 82.38,
+    "invoice_date": 84.97,
+    "unit_number": 89.12,
+    "vin": 65.28,
+    "odometer": 87.56,
+    "subtotal": 92.23,
+    "tax": 92.75,
+    "total": 94.3,
+    "line.description": 92.96,
+    "line.part_number": 93.4,
+    "line.qty": 96.77,
+    "line.parts_price": 88.56,
+    "line.labour_hours": 95.45,
+    "line.labour_rate": 95.45,
+    "line.line_total": 89.0
+  },
+  "per_file_kind_accuracy_pct": {
+    "multi_pdf": 99.33,
+    "clean_pdf": 98.72,
+    "phone_photo": 74.25,
+    "handwritten": 87.09,
+    "skewed_scan": 98.92
+  },
+  "vmrs_accuracy_pct": 89.44,
+  "ai_seconds_per_invoice": 8.43,
+  "flags": 91,
+  "flag_precision_pct": 40.66,
+  "false_positives": 54,
+  "false_positives_marked_check_extraction": 45,
+  "confident_flags": 31,
+  "confident_flag_precision_pct": 70.97,
+  "flag_recall_pct": 69.23,
+  "per_rule": {
+    "labour_over_benchmark": {
+      "planted": 11,
+      "flags": 17,
+      "tp": 10,
+      "fp_uncertain": 0,
+      "found": 10,
+      "recall_pct": 90.91,
+      "precision_pct": 58.82
+    },
+    "repeat_repair": {
+      "planted": 9,
+      "flags": 2,
+      "tp": 2,
+      "found": 2,
+      "recall_pct": 22.22,
+      "precision_pct": 100.0
+    },
+    "warranty_eligible": {
+      "planted": 7,
+      "flags": 8,
+      "tp": 4,
+      "fp_uncertain": 2,
+      "found": 4,
+      "recall_pct": 57.14,
+      "precision_pct": 50.0
+    },
+    "parts_price_outlier": {
+      "planted": 10,
+      "flags": 8,
+      "tp": 6,
+      "fp_uncertain": 2,
+      "found": 6,
+      "recall_pct": 60.0,
+      "precision_pct": 75.0
+    },
+    "duplicate": {
+      "planted": 4,
+      "flags": 4,
+      "tp": 4,
+      "found": 4,
+      "recall_pct": 100.0,
+      "precision_pct": 100.0
+    },
+    "math_error": {
+      "planted": 11,
+      "flags": 52,
+      "tp": 11,
+      "fp_uncertain": 41,
+      "found": 10,
+      "recall_pct": 90.91,
+      "precision_pct": 21.15
+    }
+  },
+  "planted_total": 52,
+  "planted_found": 36,
+  "accepted": 37,
+  "amount_corrected": 5,
+  "dismissed": 54,
+  "report": {
+    "recoverable": 13543.89,
+    "pct_of_spend": 4.6,
+    "total_spend": 292984.87,
+    "flag_count": 37,
+    "share_url": "http://localhost:3000/r/BLlp3HVrkvIvD-ui3Xje_7Z1N9zAU4gQOn60hIOG5WY",
+    "pdf_bytes": 39288
+  },
+  "seconds_extraction_per_invoice": 9.516,
+  "seconds_checks": 119.4,
+  "seconds_total_200": 1966.3,
+  "extraction_cost_usd": 3.3863,
+  "cost_per_invoice_usd": 0.01821,
+  "flag_explanation_cost_usd": 0.12785
+}

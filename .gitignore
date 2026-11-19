@@ -10,3 +10,5 @@ synthetic/out/
 *.log
 .local/
 api/.venv/
+synthetic_dataset_v1_full/*
+Build Scope of Work – Repair Invoice Audit POC.pdf

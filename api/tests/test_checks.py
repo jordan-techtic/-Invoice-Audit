@@ -55,3 +55,26 @@ def test_line_math_accepts_extended_parts_price():
     assert "line_math" not in r.checks_failed
     r = run(H(subtotal="200.00", total="200.00"), L(total="200.00", qty=4, parts_price="50.00"))
     assert "line_math" not in r.checks_failed
+
+
+def test_vin_longer_than_17_keeps_the_valid_window_and_never_overflows():
+    r = run(H(vin="VIN: 1M8GDM9AXKP042788 X"), L())            # real model output had extra characters around a valid VIN
+    assert r.header["vin"].value == "1M8GDM9AXKP042788" and r.header["vin"].failed_check and "kept the 17" in r.header["vin"].note
+    r = run(H(vin="A" * 26), L())        # contains no valid 17-character VIN
+    assert r.header["vin"].value is None and r.header["vin"].failed_check and "read as 26" in r.header["vin"].note
+    r = run(H(vin="1M8GDM9AXKP04278"), L())                   # too short: kept as read (fits the column), sent to review
+    assert r.header["vin"].value == "1M8GDM9AXKP04278" and r.header["vin"].failed_check
+
+
+def test_absurd_numbers_and_long_ids_are_cut_not_crashed():
+    r = run(H(total="99999999999999.00", unit_number="U" * 120), L(qty=123456789, total="100.00"))
+    assert r.header["total"].value is None and r.header["total"].failed_check
+    assert len(r.header["unit_number"].value) == 50 and r.header["unit_number"].failed_check
+
+
+def test_short_number_in_the_vin_field_is_moved_to_the_odometer_and_flagged():
+    r = run(H(vin="397578", odometer=None), L())
+    assert r.header["vin"].value is None and r.header["odometer"].value == 397578
+    assert r.header["odometer"].failed_check and "probably the odometer" in r.header["odometer"].note
+    r = run(H(vin="397578", odometer="410000"), L())             # odometer already read: do not overwrite it
+    assert r.header["odometer"].value == 410000 and r.header["vin"].failed_check

@@ -33,7 +33,7 @@ def test_refuses_without_key_or_zdr_confirmation():
     with pytest.raises(ExtractionError, match="OPENAI_API_KEY"):
         OpenAIVisionProvider(Settings(env="local", openai_api_key=None, ai_zdr_confirmed=True))
     with pytest.raises(ExtractionError, match="Zero data retention"):
-        OpenAIVisionProvider(Settings(env="local", openai_api_key="sk-x", ai_zdr_confirmed=False))
+        OpenAIVisionProvider(Settings(env="local", openai_api_key="sk-x", ai_zdr_confirmed=False, ai_zero_retention_required=True))
 
 
 def test_extract_sends_image_and_json_schema_and_parses(monkeypatch):
@@ -64,5 +64,26 @@ def test_provider_setting_selects_provider():
 
 def test_api_key_never_appears_in_error_messages():
     with pytest.raises(ExtractionError) as e:
-        OpenAIVisionProvider(Settings(env="local", openai_api_key="sk-secret-123", ai_zdr_confirmed=False))
+        OpenAIVisionProvider(Settings(env="local", openai_api_key="sk-secret-123", ai_zdr_confirmed=False, ai_zero_retention_required=True))
     assert "sk-secret-123" not in str(e.value)
+
+
+def test_rate_limit_and_quota_errors_get_clear_messages_not_a_crash():
+    import httpx
+    import openai
+
+    from app.services.extraction.base import ExtractionError
+
+    p = OpenAIVisionProvider(_settings())
+
+    def raiser(code):
+        def create(**kw):
+            req = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+            raise openai.RateLimitError("limit", response=httpx.Response(429, request=req), body={"code": code})
+        return create
+
+    for code, expect in (("rate_limit_exceeded", "busy"), ("insufficient_quota", "out of credit")):
+        p._client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=raiser(code))))
+        with pytest.raises(ExtractionError) as e:
+            p.extract_page(b"\xff\xd8x")
+        assert expect in str(e.value) and "Retry" in str(e.value)

@@ -85,9 +85,6 @@ export class ApiError extends Error {
   }
 }
 
-let onUnauthorized: (() => void) | null = null;
-export function setUnauthorizedHandler(fn: (() => void) | null) { onUnauthorized = fn; }
-
 export const apiUrl = (path: string) => `/api${path}`;
 
 export function errorText(body: unknown, status: number): string {
@@ -113,10 +110,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith("/auth/login")) onUnauthorized?.();
-    throw new ApiError(res.status, res.status === 401 && path.startsWith("/auth/login")
-      ? "That email and password don't match. Check both and try again."
-      : errorText(body, res.status));
+    throw new ApiError(res.status, errorText(body, res.status));
   }
   return body as T;
 }
@@ -124,8 +118,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 const json = (method: string, data?: unknown): RequestInit => ({ method, body: data === undefined ? undefined : JSON.stringify(data) });
 
 export const api = {
-  login: (email: string, password: string) => request<User>("/auth/login", json("POST", { email, password })),
-  logout: () => request<unknown>("/auth/logout", { method: "POST" }),
   me: () => request<User>("/auth/me"),
   clients: () => request<Client[]>("/clients"),
   addClient: (name: string) => request<Client>("/clients", json("POST", { name })),
@@ -188,7 +180,7 @@ export function uploadFile(cid: string, file: File, onProgress: (fraction: numbe
     xhr.onload = () => {
       let body: unknown = null;
       try { body = JSON.parse(xhr.responseText); } catch { /* handled below */ }
-      if (xhr.status === 401) { onUnauthorized?.(); return fail("You're signed out. Sign in again and retry."); }
+      if (xhr.status === 401) return fail("You're not allowed to upload. Refresh the page and try again.");
       if (xhr.status >= 200 && xhr.status < 300 && Array.isArray(body) && body[0]) return resolve(body[0] as UploadResult);
       fail(errorText(body, xhr.status));
     };

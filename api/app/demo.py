@@ -83,7 +83,7 @@ def main() -> None:
     header_t, line_t, overall = defaultdict(Tally), defaultdict(Tally), Tally()
     kind_t: dict[str, Tally] = defaultdict(Tally)
     vmrs = [0, 0]
-    n_dup_expected = n_dup_found = n_failed = n_invoices_expected = 0
+    n_dup_expected = n_dup_found = n_failed = n_invoices_expected = retries = 0
     split_ok = split_n = 0
     t_extract = 0.0
     for i, entry in enumerate(files, start=1):
@@ -95,6 +95,19 @@ def main() -> None:
         with client_session(cid) as db:
             db.info["user_id"] = None
             up = ingest_file(db, filename=Path(entry["file"]).name, data=data, source=UploadSource.web)
+            # Rate limits and timeouts are temporary: do what an operator does and press Retry, up to 3 times.
+            from app.services.pipeline import process_upload
+
+            for attempt in range(3):
+                if up.status != UploadStatus.failed:
+                    break
+                time.sleep(45 * (attempt + 1))
+                retries += 1
+                if OFFLINE:
+                    it = iter(pages_for_file(entry, rng))
+                    FakeProvider.responder = lambda _img, it=it: next(it)
+                process_upload(str(cid), str(up.id))
+                db.refresh(up)
             t_extract += time.monotonic() - t0
             if entry.get("exact_duplicate_of"):
                 n_dup_expected += 1
@@ -133,7 +146,7 @@ def main() -> None:
     with client_session(cid) as db:
         n_invoices = db.scalar(select(func.count()).select_from(Invoice))
         runs = db.scalars(select(ExtractionRun)).all()
-    print(f"[2/6] Read {len(files)} files -> {n_invoices} invoices ({t_extract:.0f}s); duplicates skipped {n_dup_found}/{n_dup_expected}; failed files {n_failed}")
+    print(f"[2/6] Read {len(files)} files -> {n_invoices} invoices ({t_extract:.0f}s); duplicates skipped {n_dup_found}/{n_dup_expected}; failed files {n_failed} (after {retries} automatic retries)")
 
     # ---- checks via the real API
     c = TestClient(app)
@@ -226,7 +239,7 @@ def main() -> None:
     wall = time.monotonic() - t_start
     metrics = {
         "mode": "offline_oracle" if OFFLINE else "real_ai", "files": len(files), "invoices": n_invoices, "invoices_expected": n_invoices_expected,
-        "exact_duplicates_skipped": f"{n_dup_found}/{n_dup_expected}", "failed_files": n_failed, "split_correct_pct": pct(split_ok, split_n),
+        "exact_duplicates_skipped": f"{n_dup_found}/{n_dup_expected}", "failed_files": n_failed, "retries": retries, "split_correct_pct": pct(split_ok, split_n),
         "field_accuracy_pct": overall.as_dict()["accuracy_pct"], "fields_compared": overall.n,
         "per_field_accuracy_pct": {**{f: header_t[f].as_dict()["accuracy_pct"] for f in HEADER}, **{"line." + f: line_t[f].as_dict()["accuracy_pct"] for f in LINE}},
         "per_file_kind_accuracy_pct": {k: v.as_dict()["accuracy_pct"] for k, v in kind_t.items()}, "vmrs_accuracy_pct": pct(*vmrs),

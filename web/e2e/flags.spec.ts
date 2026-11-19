@@ -6,10 +6,7 @@ test("run checks shows the hero figure and flag rows", async ({ page, request })
   test.setTimeout(180_000);
   const cid = await apiLogin(request);
   await bulk(request, cid, await ensureFlags(request, cid), "reopen");
-  await page.goto("/login");
-  await page.getByLabel("Email").fill("admin@audit-demo.com");
-  await page.getByLabel("Password").fill("admin-password-123");
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.goto("/clients");
   await page.getByRole("button", { name: "Work on Lone Prairie Freight" }).click();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Review" }).click();
   await page.getByRole("link", { name: "Flags to review" }).click();
