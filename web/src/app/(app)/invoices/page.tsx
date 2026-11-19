@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, money, shortDate, type InvoiceSummary, type ReviewStatus } from "@/lib/api";
+import { useSession } from "@/lib/session";
+import { useProgress } from "@/lib/progress";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import NeedClient from "@/components/NeedClient";
 import ReviewTabs from "@/components/ReviewTabs";
 import StatusMark from "@/components/StatusMark";
@@ -19,7 +22,7 @@ const TABS: { id: Filter; label: string }[] = [
 ];
 
 export default function InvoicesPage() {
-  return <NeedClient>{(c) => <List cid={c.id} />}</NeedClient>;
+  return <NeedClient>{(c) => <List key={c.id} cid={c.id} />}</NeedClient>;
 }
 
 function List({ cid }: { cid: string }) {
@@ -31,6 +34,14 @@ function List({ cid }: { cid: string }) {
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "invoice_date", dir: -1 });
+  const { user } = useSession();
+  const progress = useProgress();
+  const isAdmin = user.role === "admin";
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [dialog, setDialog] = useState<null | "check" | "delete">(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -38,7 +49,11 @@ function List({ cid }: { cid: string }) {
       .then((r) => { if (live) { setAll(r); setError(null); } })
       .catch((e) => { if (live) setError(e instanceof Error ? e.message : "Couldn't load invoices. Refresh the page."); });
     return () => { live = false; };
-  }, [cid]);
+  }, [cid, reloadKey]);
+
+  // A selection only ever covers what is on screen: changing the tab or the search clears it.
+  function changeFilter(f: Filter) { setFilter(f); setSelected(new Set()); }
+  function changeSearch(v: string) { setQ(v); setSelected(new Set()); }
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { "": all?.length ?? 0, needs_review: 0, ready: 0, reviewed: 0 };
@@ -59,6 +74,26 @@ function List({ cid }: { cid: string }) {
   }, [all, filter, q, sort]);
 
   const total = (rows ?? []).reduce((s, r) => s + (Number(r.total) || 0), 0);
+  const chosen = (rows ?? []).filter((r) => selected.has(r.id));
+  const eligibleToCheck = chosen.filter((r) => r.review_status !== "reviewed").length;
+  const allOn = !!rows && rows.length > 0 && chosen.length === rows.length;
+  useEffect(() => { if (selectAllRef.current) selectAllRef.current.indeterminate = chosen.length > 0 && !allOn; }, [chosen.length, allOn]);
+
+  function toggle(id: string) {
+    setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  }
+  function toggleAll() { setSelected(allOn ? new Set() : new Set((rows ?? []).map((r) => r.id))); }
+  const plural = (n: number) => `${n} ${n === 1 ? "invoice" : "invoices"}`;
+  async function doCheck() {
+    const r = await api.bulkCheck(cid, chosen.map((x) => x.id));
+    setDialog(null); setSelected(new Set()); setReloadKey((k) => k + 1); void progress?.refresh();
+    setNotice(`${plural(r.checked)} marked as checked.${r.already_checked ? ` ${plural(r.already_checked)} ${r.already_checked === 1 ? "was" : "were"} already checked.` : ""}`);
+  }
+  async function doDelete() {
+    const r = await api.bulkDelete(cid, chosen.map((x) => x.id));
+    setDialog(null); setSelected(new Set()); setReloadKey((k) => k + 1); void progress?.refresh();
+    setNotice(`${plural(r.deleted)} deleted.`);
+  }
   const nextToCheck = all?.find((r) => r.review_status === "needs_review");
 
   function head(key: SortKey, label: string, right = false) {
@@ -86,7 +121,7 @@ function List({ cid }: { cid: string }) {
       <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filter by status">
           {TABS.map((t) => (
-            <button key={t.id || "all"} role="tab" aria-selected={filter === t.id} onClick={() => setFilter(t.id)}
+            <button key={t.id || "all"} role="tab" aria-selected={filter === t.id} onClick={() => changeFilter(t.id)}
               className={`chip ${filter === t.id ? "border-primary bg-primary text-white" : "border-line-strong bg-surface text-ink hover:bg-sunken"}`}>
               {t.label} <span className={`num rounded-full px-2 text-xs ${filter === t.id ? "bg-white/20" : "bg-sunken"}`}>{counts[t.id] ?? 0}</span>
             </button>
@@ -94,10 +129,21 @@ function List({ cid }: { cid: string }) {
         </div>
         <div className="w-full sm:w-[300px]">
           <label htmlFor="inv-search" className="sr-only">Search invoices</label>
-          <input id="inv-search" type="search" className="field" placeholder="Search shop, invoice or unit" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input id="inv-search" type="search" className="field" placeholder="Search shop, invoice or unit" value={q} onChange={(e) => changeSearch(e.target.value)} />
         </div>
       </div>
 
+      {notice && <p role="status" className="mt-4 font-medium text-confirmed">{notice}</p>}
+      {chosen.length > 0 && (
+        <div role="region" aria-label="Selected invoices" className="sticky top-0 z-10 mt-4 flex flex-wrap items-center gap-3 rounded-lg border border-line-strong bg-surface px-4 py-3 shadow-sm">
+          <span className="font-bold"><span className="num">{chosen.length}</span> selected</span>
+          <button className="btn-primary btn-sm" disabled={eligibleToCheck === 0} onClick={() => setDialog("check")}>
+            Mark {eligibleToCheck === chosen.length ? chosen.length : eligibleToCheck} as checked
+          </button>
+          {isAdmin && <button className="btn-danger btn-sm" onClick={() => setDialog("delete")}>Delete {chosen.length}</button>}
+          <button className="btn-link ml-auto" onClick={() => setSelected(new Set())}>Clear selection</button>
+        </div>
+      )}
       {error && <p role="alert" className="mt-6 text-danger">{error}</p>}
       {!all && !error && <p className="mt-6 text-muted" role="status">Loading invoices…</p>}
 
@@ -116,6 +162,12 @@ function List({ cid }: { cid: string }) {
             <caption className="sr-only">Invoices</caption>
             <thead>
               <tr>
+                <th scope="col" className="th w-12">
+                  <label className="flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center">
+                    <input ref={selectAllRef} type="checkbox" checked={allOn} onChange={toggleAll} className="h-5 w-5" style={{ accentColor: "var(--primary)" }}
+                      aria-label={allOn ? `Clear selection of all ${rows.length} invoices` : `Select all ${rows.length} invoices in this list`} />
+                  </label>
+                </th>
                 {head("shop", "Shop")}
                 {head("invoice_number", "Invoice number")}
                 {head("invoice_date", "Date")}
@@ -128,7 +180,13 @@ function List({ cid }: { cid: string }) {
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="tr hover:bg-bg">
+                <tr key={r.id} className={`tr hover:bg-bg ${selected.has(r.id) ? "bg-sunken" : ""}`} aria-selected={selected.has(r.id)}>
+                  <td className="td w-12">
+                    <label className="flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center">
+                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggle(r.id)} className="h-5 w-5" style={{ accentColor: "var(--primary)" }}
+                        aria-label={`Select invoice ${r.invoice_number || ""} from ${r.shop || "unknown shop"}`} />
+                    </label>
+                  </td>
                   <td className="td font-medium">
                     <Link href={`/invoices/${r.id}`} className="text-primary underline-offset-4 hover:underline">{r.shop || "Shop not read"}</Link>
                   </td>
@@ -148,7 +206,7 @@ function List({ cid }: { cid: string }) {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-line-strong">
-                <td className="td font-bold" colSpan={4}>{rows.length} {rows.length === 1 ? "invoice" : "invoices"}</td>
+                <td className="td font-bold" colSpan={5}>{rows.length} {rows.length === 1 ? "invoice" : "invoices"}</td>
                 <td className="td num text-right font-bold">{money(total)}</td>
                 <td className="td" colSpan={3} />
               </tr>
@@ -156,6 +214,13 @@ function List({ cid }: { cid: string }) {
           </table>
         </div>
       )}
+
+      <ConfirmDialog open={dialog === "check"} title={`Mark ${plural(eligibleToCheck)} as checked?`}
+        body="This confirms that every highlighted field on these invoices is right as read, or has been fixed. Look at the invoices first if you are not sure."
+        actionLabel={`Mark ${eligibleToCheck} as checked`} onConfirm={doCheck} onClose={() => setDialog(null)} />
+      <ConfirmDialog open={dialog === "delete"} danger title={`Delete ${plural(chosen.length)}?`}
+        body="This permanently deletes the selected invoices with their lines and any flags on them. The original uploaded files are kept. Reports that were already created do not change. This cannot be undone."
+        confirmWord="DELETE" actionLabel={`Delete ${chosen.length}`} onConfirm={doDelete} onClose={() => setDialog(null)} />
     </div>
   );
 }

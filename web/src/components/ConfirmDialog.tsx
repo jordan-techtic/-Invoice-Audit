@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 
 interface Props {
-  open: boolean; title: string; body: string; confirmWord: string; actionLabel: string;
+  open: boolean; title: string; body: string; confirmWord?: string; actionLabel: string; danger?: boolean;
   onConfirm: () => Promise<void>; onClose: () => void;
 }
 
-export default function ConfirmDialog({ open, title, body, confirmWord, actionLabel, onConfirm, onClose }: Props) {
+export default function ConfirmDialog({ open, title, body, confirmWord, actionLabel, danger, onConfirm, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
@@ -35,11 +35,15 @@ export default function ConfirmDialog({ open, title, body, confirmWord, actionLa
       <form onSubmit={go}>
         <h2 className="text-lg">{title}</h2>
         <p className="mt-2">{body}</p>
-        <label htmlFor="confirm-word" className="mb-1 mt-4 block text-sm font-medium">Type {confirmWord} to confirm</label>
-        <input id="confirm-word" className="field" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+        {confirmWord && (
+          <>
+            <label htmlFor="confirm-word" className="mb-1 mt-4 block text-sm font-medium">Type {confirmWord} to confirm</label>
+            <input id="confirm-word" className="field" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+          </>
+        )}
         {error && <p role="alert" className="mt-3 text-danger">{error}</p>}
         <div className="mt-5 flex gap-3">
-          <button type="submit" className="btn-primary" disabled={typed !== confirmWord || busy}>{busy ? "Working…" : actionLabel}</button>
+          <button type="submit" className={danger ? "btn-danger" : "btn-primary"} disabled={(!!confirmWord && typed !== confirmWord) || busy}>{busy ? "Working…" : actionLabel}</button>
           <button type="button" className="btn-secondary" onClick={close}>Cancel</button>
         </div>
       </form>

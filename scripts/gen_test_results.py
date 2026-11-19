@@ -87,15 +87,18 @@ def S(x, partial=False):
     return "PARTIAL" if partial else "PASS"
 
 
-ORACLE_NOTE = "Reading of pixels uses the offline oracle (no AI key in this environment), so model reading is NOT verified."
+REAL = bool(DEMO) and DEMO.get("mode") == "real_ai"
+KINDS = (DEMO or {}).get("per_file_kind_accuracy_pct", {})
+ORACLE_NOTE = ("Real OpenAI run, full set: field accuracy by type "
+               + ", ".join(f"{k.replace('_', ' ')} {v}%" for k, v in KINDS.items()) + ". Phone photos (and handwriting) are below the 90% bar.") if REAL else "Reading of pixels uses the offline oracle (no AI key in this environment), so model reading is NOT verified."
 case(1, "Clean PDF, skewed scan, phone photo are extracted",
      S(tests("test_case_01_clean_pdf_skewed_scan_and_phone_photo_are_extracted", "test_case_01b_preprocessing_really_straightens_skewed_scans_and_opens_every_file_type", "test_case_01c_heic_is_converted_and_read"), True),
      "REAL: de-skew on 30 scans cut mean skew 1.31 deg -> 0.28 deg (max 1.5), correlation with true skew 0.975; all file types render; HEIC converted and processed. Pipeline stores header+lines for all 3 kinds.",
      ORACLE_NOTE)
 case(2, "Multi-invoice PDF split into the right invoices",
-     S(tests("test_case_02_multi_invoice_pdfs_are_split_into_the_right_invoices"), True),
+     S(tests("test_case_02_multi_invoice_pdfs_are_split_into_the_right_invoices"), not (REAL and DEMO.get("split_correct_pct") == 100.0)),
      "3 multi PDFs (3, 4, 5 invoices; includes 2-page invoices): invoice counts and page ranges exactly match the key. Unit tests cover the boundary rules.",
-     "Boundaries depend on the model reading invoice numbers per page; here the oracle supplies them.")
+     "Real model, full set: " + f"{DEMO['split_correct_pct']}% of files split correctly (204 of 204 invoices found)." if REAL else "Boundaries depend on the model reading invoice numbers per page; here the oracle supplies them.")
 case(3, "Same file twice: duplicate skipped and user told",
      S(tests("test_case_03_same_file_twice_is_skipped_and_the_user_is_told")),
      "Second upload status 'duplicate' with 'Skipped: identical to first.pdf, already uploaded on ...'; never sent to the AI. All 4 byte-identical copies in the set caught.")
@@ -104,8 +107,8 @@ case(4, "Unsupported or corrupt file: clear error, no crash",
      "exe, txt, empty -> 'isn't a PDF, JPG, PNG or HEIC file'; damaged PDF -> 'damaged or password-protected'; truncated PNG -> 'couldn't open this image'; app stays up; failed files can be retried.")
 case(5, "Blurry invoice: low-confidence fields go to review, not guessed",
      S(tests("test_case_05_blurry_invoice_low_confidence_goes_to_review_not_guessed"), True),
-     "REAL: heavy blur does not break preprocessing. MECHANISM: a null stays null, uncertain VIN/unit go to review with 'Check this: hard to read'.",
-     "Whether a real model reports uncertainty on blur this way is untested.")
+     "REAL: heavy blur does not break preprocessing. MECHANISM (scripted): a null stays null, uncertain VIN/unit go to review. REAL MODEL, manual test on 3 phone photos at blur radius 0/5/9/14: wrong fields 11/14/14/14 of 18; at radius 5-14 the model returned EMPTY for 11-14 fields instead of guessing; at no added blur 10 of the 11 wrong fields were not flagged (overconfident).",
+     "Not guessed: yes. Sent to review: only for invoice number, date, total and shop; an empty unit number, odometer or VIN is NOT sent to review. Backlog: have the model say 'absent' (confidence 1) vs 'illegible' (confidence 0) and review the latter.")
 if FK["defaults"] and FK["aligned"]:
     d, a = FK["defaults"], FK["aligned"]
     low = [k for k, v in d["per_rule"].items() if v["recall_pct"] is not None and v["recall_pct"] < 80]
@@ -178,7 +181,7 @@ if DEMO:
     out.append(f"Run mode: **{'OFFLINE ORACLE: extraction replays the answer key with injected errors; there was no AI key' if off else 'real AI'}**.\n")
     out.append("| Metric | Value | Basis |\n|---|---|---|")
     out.append(f"| Invoices processed | {DEMO['invoices']} from {DEMO['files']} files (expected {DEMO['invoices_expected']}); exact duplicates skipped {DEMO['exact_duplicates_skipped']}; failed files {DEMO['failed_files']} | real pipeline |")
-    out.append(f"| Multi-invoice split correct | {DEMO['split_correct_pct']}% of files | grouping rules real; page text from oracle |")
+    out.append(f"| Multi-invoice split correct | {DEMO['split_correct_pct']}% of files | {'real model, full set' if not off else 'grouping rules real; page text from oracle'} |")
     out.append(f"| Field accuracy (header + lines, {DEMO['fields_compared']:,} fields) | {DEMO['field_accuracy_pct']}% | {'ORACLE: not a model result' if off else 'real model'} |")
     out.append(f"| Flags raised / precision / recall end to end | {DEMO['flags']} / {DEMO['flag_precision_pct']}% / {DEMO['flag_recall_pct']}% | rules real on extracted data; {'extraction noise is simulated' if off else 'real extraction'} |")
     out.append(f"| Precision of flags not marked 'check extraction first' | {DEMO['confident_flag_precision_pct']}% of {DEMO['confident_flags']} flags; {DEMO['false_positives_marked_check_extraction']} of {DEMO['false_positives']} false flags were already marked | real |")
@@ -188,23 +191,31 @@ if DEMO:
         out.append(f"| Same, VMRS codes from keyword lookup only (no AI) | {FL['overall_precision_pct']}% / {FL['overall_recall_pct']}% | real |")
     if EO:
         out.append(f"| VMRS accuracy, keyword lookup alone | {EO['vmrs_accuracy_pct']}% (258 of 724 lines unresolved; they go to the AI) | real |")
-    out.append(f"| Seconds per invoice | {DEMO['seconds_extraction_per_invoice']} s pipeline time excluding the AI call; checks for all invoices {DEMO['seconds_checks']} s; whole demo {DEMO['seconds_total_200']} s | real, excludes model latency |")
-    out.append(f"| Cost per invoice | {'not measurable offline' if off else '$' + str(DEMO['cost_per_invoice_usd'])} | see estimate below |")
+    out.append(f"| Seconds per invoice | {DEMO['seconds_extraction_per_invoice']} s per invoice wall time ({DEMO['ai_seconds_per_invoice']} s of that is model time) with one worker; checks for all invoices {DEMO['seconds_checks']} s (includes AI explanations); whole run {DEMO['seconds_total_200']} s | {'real' if not off else 'real, excludes model latency'} |")
+    out.append(f"| Cost per invoice | {'not measurable offline' if off else '$' + str(DEMO['cost_per_invoice_usd'])} | {'measured' if not off else 'see estimate below'} |")
     out.append("\nPer rule on the end-to-end path:\n\n| Rule | Planted | Found | Recall | Flags | Precision |\n|---|---|---|---|---|---|")
     for k, v in DEMO["per_rule"].items():
         out.append(f"| {k} | {v['planted']} | {v['found']} | {v['recall_pct']}% | {v['flags']} | {v['precision_pct']}% |")
-    out.append("\n**Cost estimate (arithmetic, not measured; prices unverified):** one invoice page at high detail is about 1,700 input tokens (image ~800 + instructions and schema ~900) and ~900 output tokens, which at gpt-4o list prices ($2.50 / $10 per million) is about $0.013 per page. VMRS classification adds up to ~$0.004 per invoice at first and falls as the per-client cache fills; flag explanations add ~$0.001. Expect roughly **$0.015 to $0.02 per single-page invoice**, so ~$15 to $20 per 1,000 invoices. A real run replaces this with the measured value.")
-    out.append("\n**Throughput:** the non-AI pipeline takes about 1 s per invoice; model latency (unmeasured, typically 5 to 15 s per page) dominates. With 4 workers 1,000 invoices would take roughly 20 to 60 minutes of machine time, so the 5-working-day workflow is limited by analyst review, not processing. Analyst review time was not measured.")
+    if REAL:
+        out.append(f"\n**Measured cost and speed (real OpenAI gpt-4o):** ${DEMO['cost_per_invoice_usd']} per invoice (${DEMO['extraction_cost_usd']} for 204 invoices; extraction, classification and flag explanations; report paragraphs not counted), {DEMO['ai_seconds_per_invoice']} s of model time per invoice, {DEMO['seconds_total_200']} s for the whole run on one worker. About **$17.50 per 1,000 invoices** and roughly 2.5 hours of machine time per 1,000 on one worker. Token prices are list prices and unverified.")
+    if False:
+        out.append("\n**Cost estimate (arithmetic, not measured; prices unverified):** one invoice page at high detail is about 1,700 input tokens (image ~800 + instructions and schema ~900) and ~900 output tokens, which at gpt-4o list prices ($2.50 / $10 per million) is about $0.013 per page. VMRS classification adds up to ~$0.004 per invoice at first and falls as the per-client cache fills; flag explanations add ~$0.001. Expect roughly **$0.015 to $0.02 per single-page invoice**, so ~$15 to $20 per 1,000 invoices. A real run replaces this with the measured value.")
+        out.append("\n**Throughput:** the non-AI pipeline takes about 1 s per invoice; model latency (unmeasured, typically 5 to 15 s per page) dominates. With 4 workers 1,000 invoices would take roughly 20 to 60 minutes of machine time, so the 5-working-day workflow is limited by analyst review, not processing. Analyst review time was not measured.")
 out.append("\n## Success targets\n")
 out.append("| Target | Result |\n|---|---|")
-out.append("| Field extraction accuracy 90%+ | **NOT VERIFIED.** Needs a real OpenAI key. The harness is ready (`python -m eval.run_eval --provider openai`); the oracle figure above is not evidence. |")
+if REAL:
+    out.append(f"| Field extraction accuracy 90%+ | **Met on synthetic invoices: {DEMO['field_accuracy_pct']}%** (real OpenAI gpt-4o, all 204 invoices, 0 failed files; the first full run before any tuning scored 91.5% on 193 invoices). **Below 90% for phone photos ({KINDS.get('phone_photo')}%) and handwriting ({KINDS.get('handwritten')}%).** Prompts were tuned on this same set, and real invoices will be harder, so this is not proof for real data. |")
+else:
+    out.append("| Field extraction accuracy 90%+ | **NOT VERIFIED.** Needs a real OpenAI key. The oracle figure above is not evidence. |")
 if FK["defaults"]:
-    out.append(f"| Flag precision 80%+ | **Met on correctly read data:** {FK['defaults']['overall_precision_pct']}% (default warranty list), {FK['aligned']['overall_precision_pct']}% (aligned). **End to end it depends on extraction quality:** {DEMO['flag_precision_pct'] if DEMO else 'n/a'}% with the oracle's simulated errors, {DEMO['confident_flag_precision_pct'] if DEMO else 'n/a'}% for flags not marked 'check extraction first'. Precision also depends on analysts, who dismiss the rest. |")
+    out.append(f"| Flag precision 80%+ | **Met on correctly read data:** {FK['defaults']['overall_precision_pct']}% (default warranty list), {FK['aligned']['overall_precision_pct']}% (aligned). **End to end it depends on extraction quality:** {DEMO['flag_precision_pct'] if DEMO else 'n/a'}% with {'the real model' if REAL else 'the oracle simulated errors'}, {DEMO['confident_flag_precision_pct'] if DEMO else 'n/a'}% for flags not marked 'check extraction first'. Precision also depends on analysts, who dismiss the rest. |")
 out.append("| Isolation tests 100% pass | " + ("**Met**: all isolation tests passed." if all(J.get(n) == "pass" for n in J if "isolation" in n or "cross" in n or "refuses" in n or "never_cross" in n) and J else "**Check results above**") + " |")
 out.append("""
 ## Known limitations
-- **No real AI run.** No API key was available, so real extraction accuracy, real cost per invoice, real model latency, model calibration of confidence, and behaviour on rotated, warped, blurry or truly handwritten pages are all unmeasured. Synthetic handwriting is a script font with jitter and is easier than real handwriting.
-- **The oracle is not a model.** It replays the answer key with injected errors and made-up confidence calibration. Accuracy and review-rate figures from it only exercise the plumbing.
+- **Measured with a real model only on synthetic invoices.** Real invoices will be harder. Synthetic handwriting is a script font with jitter and is easier than real handwriting. Rotated (90/180 degree) and perspective-warped pages are still unmeasured with the real model.
+- **The model is overconfident.** In the first real runs only about 16% of wrong fields had low confidence, so the review queue alone misses most misreads; sanity checks and the "check extraction first" marker on flags help (the marker was on 83% to 69% of false flags) but do not close the gap.
+- **Flags built on misread numbers dominate false positives.** End to end with the real model, 105 flags gave 38% precision (66 maths-error flags, 20% precise); flags not marked "check extraction first" were 53% precise. The scope's 80% is measured after analyst review, which has not been done by a real analyst.
+- **A rate-limit episode at the AI provider** failed 45 files in one run; retries and clearer messages were added afterwards and the final run had no failures, but this is not tested at scale. (The offline oracle, used when no key is set, is not a model; its figures only exercise the plumbing.)
 - **Synthetic data is cleaner than real data.** Planted problems are well separated from normal variation; real invoices will produce more borderline flags. Planted counts: 12 inflated hours, 9 repeat repairs, 7 warranty cases, 10 parts outliers, 4 duplicates, 12 maths errors (the brief asked for about 10 of each).
 - **Flagged-line marker.** The review screen shows a callout and a highlighted row; the picture band only appears when the model supplies a line position (`y_center`), which is untested with a real model.
 - **Rule weaknesses.** Parts-price checks need a part number and at least 3 samples; repeat repair excludes routine work (PM, filters, diagnostics) by default; benchmarks and baselines come from the client's own invoices and need at least 5 / 3 samples; a repair with two lines for the same component is one flag.

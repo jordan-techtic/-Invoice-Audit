@@ -223,7 +223,7 @@ def test_repo_contains_no_api_keys():
     hits = []
     for f in root.rglob("*"):
         if f.is_file() and f.suffix in {".py", ".json", ".txt", ".md", ".yml", ".yaml", ".env", ".example", ".ini", ""} and "__pycache__" not in str(f) and "eval_out" not in str(f):
-            if f.name == "test_security.py":
+            if f.name == "test_security.py" or f.name == ".env":   # .env is the git-ignored local secrets file; see the next test
                 continue
             try:
                 if pat.search(f.read_text(errors="ignore")):
@@ -375,3 +375,30 @@ def test_audit_log_records_views_edits_exports_and_is_admin_browsable(admin_clie
     assert exp["user_name"] == "Admin" and exp["client_name"].startswith("A ") and exp["created_at"]
     assert all("shop" not in json.dumps(x["detail"]).lower() or True for x in rows["rows"])
     assert len(admin_client.get(f"/admin/audit-log?client_id={cid}&action=accept").json()["rows"]) == len(flags)
+
+
+def test_local_env_files_are_never_copied_into_docker_images():
+    """api/.env holds the real key on a developer machine. If .dockerignore doesn't exclude it, `COPY . .` puts it in every image layer."""
+    ignore = (Path(__file__).resolve().parents[1] / ".dockerignore").read_text().splitlines()
+    assert ".env" in ignore and any(l.strip() in (".env.*", "*.env") for l in ignore)
+    gi = Path(__file__).resolve().parents[2] / ".gitignore"          # the repo root is not mounted inside the container
+    if gi.exists():
+        assert ".env" in gi.read_text().splitlines()
+
+
+def test_deleting_by_prefix_works_with_the_postgres_storage_backend(monkeypatch):
+    """Regression: the module-level delete(key) once shadowed SQLAlchemy's delete(), so delete_prefix crashed on the Postgres backend."""
+    from app import storage
+
+    monkeypatch.setattr(get_settings(), "storage_backend", "postgres")
+    prefix = f"clients/{uuid.uuid4()}/"
+    storage.put(prefix + "a/original.pdf", b"x", "application/pdf")
+    storage.put(prefix + "a/pages/1.jpg", b"y", "image/jpeg")
+    assert storage.get(prefix + "a/original.pdf") == b"x"
+    assert storage.delete_prefix(prefix) == 2
+    with pytest.raises(Exception):
+        storage.get(prefix + "a/original.pdf")
+    storage.put(prefix + "b", b"z", "text/plain")
+    storage.delete(prefix + "b")                       # the single-object delete still works too
+    with pytest.raises(Exception):
+        storage.get(prefix + "b")

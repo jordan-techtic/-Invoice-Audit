@@ -12,6 +12,14 @@ from ..models import VmrsCache, VmrsCode
 from .normalize import normalize_description
 
 
+FEE_LINE = re.compile(r"\b(shop supplies|supplies|environmental|enviro|disposal|haz[- ]?mat|surcharge|freight|sundry|fees?|waste|tax)\b", re.I)
+
+
+def is_fee_line(description: str | None) -> bool:
+    """Shop supplies, environmental and similar charges have no VMRS job code, by design: do not ask the AI or an analyst for one."""
+    return bool(description and FEE_LINE.search(description))
+
+
 @dataclass
 class Classification:
     code: str | None
@@ -57,6 +65,9 @@ def classify_lines(db: Session, descriptions: list[str], provider, upload_id=Non
     for i, n in enumerate(norms):
         if not n:
             results[i] = Classification(None, 0.0, "none")
+            continue
+        if is_fee_line(descriptions[i]):
+            results[i] = Classification(None, 1.0, "fee")      # certain: there is no job code for a fee line
             continue
         cached = db.scalar(select(VmrsCache).where(VmrsCache.norm_description == n))
         if cached:

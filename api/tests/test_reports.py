@@ -183,3 +183,14 @@ def test_offer_text_is_editable_and_defaults_from_settings(admin_client, world):
     decide(admin_client, cid, flags, len(flags))
     snap = admin_client.get(f"/clients/{cid}/reports/{admin_client.post(f'/clients/{cid}/reports', json={'offer_text': 'Call Sam on 555-0100.'}).json()['id']}").json()
     assert snap["next_steps"]["text"] == "Call Sam on 555-0100."
+
+
+def test_audit_period_ignores_misread_years():
+    from datetime import date
+
+    from app.services.report_data import audit_period
+
+    today = date.today()
+    good = [date(today.year - 2, 3, 5), date(today.year - 1, 9, 20)]
+    assert audit_period(good + [date(2014, 9, 1), date(today.year + 3, 1, 1), None]) == audit_period(good)   # the 2014 and future dates are dropped
+    assert audit_period([date(2001, 1, 1)]) is None and audit_period([]) is None

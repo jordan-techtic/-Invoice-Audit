@@ -26,6 +26,7 @@ def get_session() -> Iterator[Session]:
 
 
 def _bypass_user(db: Session) -> User:
+    """Act as the first active admin (or any active user). Used when auth is disabled."""
     user = db.scalars(
         select(User).where(User.role == Role.admin, User.is_active.is_(True)).order_by(User.created_at).limit(1)
     ).first()
@@ -41,8 +42,10 @@ def current_user(
     db: Session = Depends(get_session),
     audit_session: str | None = Cookie(default=None),
 ) -> User:
+    # Authentication removed: always act as the seeded admin unless explicitly re-enabled.
     if get_settings().auth_disabled:
         return _bypass_user(db)
+
     token = audit_session
     auth = request.headers.get("authorization", "")
     if not token and auth.lower().startswith("bearer "):
@@ -60,13 +63,15 @@ def current_user(
 
 
 def require_admin(user: User = Depends(current_user)) -> User:
+    if get_settings().auth_disabled:
+        return user
     if user.role != Role.admin:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only admins can do this.")
     return user
 
 
 def user_can_access(db: Session, user: User, client_id: uuid.UUID) -> bool:
-    if user.role == Role.admin:
+    if get_settings().auth_disabled or user.role == Role.admin:
         return True
     row = db.execute(
         select(UserClient).where(UserClient.user_id == user.id, UserClient.client_id == client_id)

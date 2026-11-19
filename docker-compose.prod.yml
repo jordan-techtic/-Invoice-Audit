@@ -28,6 +28,9 @@ services:
   api:
     environment: *prod-env
     ports: !reset []
+    depends_on: !override               # production uses AWS S3, so the local MinIO is not started
+      db: { condition: service_healthy }
+      redis: { condition: service_started }
   worker: { environment: *prod-env }
   maintenance: { environment: *prod-env }
   web: { ports: !reset [] }

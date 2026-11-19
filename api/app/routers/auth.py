@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from .. import audit, ratelimit
 from ..config import get_settings
-from ..deps import COOKIE_NAME, current_user, get_session
+from ..deps import COOKIE_NAME, _bypass_user, current_user, get_session
 from ..models import User
 from ..schemas import LoginIn, UserOut
 from ..security import create_token, verify_password
@@ -14,6 +14,10 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/login", response_model=UserOut)
 def login(body: LoginIn, request: Request, response: Response, db: Session = Depends(get_session)):
+    # Auth is off: return the admin user without checking a password.
+    if get_settings().auth_disabled:
+        return _bypass_user(db)
+
     ip = request.client.host if request.client else "?"
     keys = [f"email:{body.email.lower()}", f"ip:{ip}"]
     wait = max(ratelimit.is_blocked(k) for k in keys)
@@ -40,7 +44,8 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
 
 @router.post("/logout", status_code=204)
 def logout(response: Response):
-    response.delete_cookie(COOKIE_NAME, path="/")
+    if not get_settings().auth_disabled:
+        response.delete_cookie(COOKIE_NAME, path="/")
 
 
 @router.get("/me", response_model=UserOut)

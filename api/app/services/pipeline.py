@@ -214,10 +214,10 @@ def _store_invoice(db, up: Upload, merged, result, threshold: float, provider) -
         for k, f in ln.items():
             if f.value not in (None, "") or f.failed_check:
                 review |= _fc(db, "line", row.id, k, f, threshold)
-        vf = FieldResult(cls.code, cls.confidence, "Check this: job type is a best guess." if cls.confidence < threshold or not cls.code else None)
-        db.add(FieldConfidence(record_type="line", record_id=row.id, field="vmrs_code", score=cls.confidence,
-                               needs_review=cls.code is None or cls.confidence < threshold, note=vf.note))
-        review |= cls.code is None or cls.confidence < threshold
+        needs_job_type = cls.source != "fee" and (cls.code is None or cls.confidence < threshold)   # fee lines legitimately have no code
+        db.add(FieldConfidence(record_type="line", record_id=row.id, field="vmrs_code", score=cls.confidence, needs_review=needs_job_type,
+                               note="Check this: job type is a best guess." if needs_job_type else None))
+        review |= needs_job_type
     inv.review_status = ReviewStatus.needs_review if review else ReviewStatus.ready
     db.flush()
     return inv

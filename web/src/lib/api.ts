@@ -165,6 +165,8 @@ export const api = {
     const f = new FormData(); f.append("file", file);
     return request<{ imported: number }>(`/clients/${cid}/benchmarks/import`, { method: "POST", body: f });
   },
+  bulkCheck: (cid: string, ids: string[]) => request<{ checked: number; already_checked: number; skipped: number }>(`/clients/${cid}/invoices/bulk-check`, json("POST", { ids })),
+  bulkDelete: (cid: string, ids: string[]) => request<{ deleted: number; skipped: number }>(`/clients/${cid}/invoices/bulk-delete`, json("POST", { ids })),
   markChecked: (cid: string, id: string) => request<unknown>(`/clients/${cid}/invoices/${id}/mark-checked`, { method: "POST" }),
 };
 

@@ -22,3 +22,14 @@ def codes():
 def test_lookup(codes, text, code):
     hit = lookup(nd(text), codes)
     assert (hit.code if hit else None) == code
+
+
+from app.services.vmrs import is_fee_line
+
+
+@pytest.mark.parametrize("text,fee", [
+    ("Shop supplies", True), ("Environmental fee", True), ("HAZMAT disposal", True), ("Fuel surcharge", True), ("Sales tax", True),
+    ("R&R water pump", False), ("Replace turbo wastegate actuator", False), ("Air dryer cartridge", False), ("", False),
+])
+def test_fee_lines_are_recognised(text, fee):
+    assert is_fee_line(text) is fee

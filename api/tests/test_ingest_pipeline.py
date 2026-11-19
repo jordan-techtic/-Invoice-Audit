@@ -185,3 +185,21 @@ def test_a_wild_vin_from_the_model_never_fails_the_whole_upload(admin_client, wo
     inv = next(i for i in admin_client.get(f"/clients/{world['a']}/invoices").json() if i["invoice_number"] == "WILD-1")
     d = admin_client.get(f"/clients/{world['a']}/invoices/{inv['id']}").json()
     assert d["header"]["vin"]["value"] is None and d["header"]["vin"]["needs_review"] and "read as 30" in d["header"]["vin"]["note"]
+
+
+def test_fee_lines_do_not_send_an_invoice_to_review_or_to_the_ai(admin_client, world):
+    """Regression (found on the real-model run): 28% of lines are fees with no job code; they put ~half of all invoices into review."""
+    fee = lambda d, p: {"description": {"value": d, "confidence": .95}, "part_number": {"value": None, "confidence": 1}, "qty": {"value": None, "confidence": 1},
+                        "parts_price": {"value": None, "confidence": 1}, "labour_hours": {"value": None, "confidence": 1}, "labour_rate": {"value": None, "confidence": 1},
+                        "line_total": {"value": p, "confidence": .95}}
+    lines = [fee("Shop supplies", "12.00"), fee("Environmental fee", "8.50"),
+             {**fee("R&R alternator", "580.00"), "qty": {"value": 1, "confidence": .95}, "parts_price": {"value": "350.00", "confidence": .95},
+              "labour_hours": {"value": 2.0, "confidence": .95}, "labour_rate": {"value": "115.00", "confidence": .95}}]
+    script(page_json(inv="FEE-1", lines=lines, subtotal="600.50", total="600.50"))
+    up = post(admin_client, world["a"], ("fee.png", png_bytes(seed=8802), "image/png")).json()[0]["upload"]
+    assert up["status"] == "done" and FakeProvider.classify_calls == 0          # fee lines were never sent to the classifier
+    inv = next(i for i in admin_client.get(f"/clients/{world['a']}/invoices").json() if i["invoice_number"] == "FEE-1")
+    assert inv["review_status"] == "ready" and inv["fields_to_check"] == 0
+    d = admin_client.get(f"/clients/{world['a']}/invoices/{inv['id']}").json()
+    assert d["lines"][0]["vmrs_code"]["value"] is None and not d["lines"][0]["vmrs_code"]["needs_review"]
+    assert d["lines"][2]["vmrs_code"]["value"] == "031-001-001"

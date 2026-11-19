@@ -52,6 +52,13 @@ def _first_sentence(text: str) -> str:
     return re.split(r"(?<=[.!?])\s+", " ".join(text.split()))[0]
 
 
+def audit_period(dates: list) -> str | None:
+    """'Jan 2024 – Sep 2026' from invoice dates, ignoring misread years (the future, or more than 5 years back) so a single bad date can't show on the cover."""
+    today = date.today()
+    ok = [d for d in dates if d and date(today.year - 5, today.month, 1) <= d <= today]
+    return f"{min(ok):%b %Y} – {max(ok):%b %Y}" if ok else None
+
+
 def open_flag_count(db: Session) -> int:
     return db.scalar(select(func.count()).select_from(Flag).where(Flag.status == FlagStatus.open)) or 0
 
@@ -87,8 +94,7 @@ def build_snapshot(db: Session, client: Client, offer_text: str | None, provider
     ).all()
     invoices = db.execute(select(Invoice.invoice_date, Invoice.total)).all()
     total_spend = float(sum((t for _, t in invoices if t is not None), Decimal(0)))
-    dates = [d for d, _ in invoices if d and date(2000, 1, 1) <= d <= date.today()]  # ignore misread dates
-    period = f"{min(dates):%b %Y} – {max(dates):%b %Y}" if dates else None
+    period = audit_period([d for d, _ in invoices])
     recoverable = float(sum((f.estimated_dollar_impact for f, _, _ in rows), Decimal(0)))
     empty = not rows
 

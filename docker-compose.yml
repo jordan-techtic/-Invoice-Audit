@@ -2,6 +2,7 @@ name: invoice-audit
 
 x-api-env: &api-env
   ENV: local
+  AUTH_DISABLED: ${AUTH_DISABLED:-true}
   DATABASE_URL: postgresql+psycopg://audit:audit@db:5432/audit
   REDIS_URL: redis://redis:6379/0
   STORAGE_BACKEND: postgres   # uploaded files live in Postgres locally; production uses S3 (docker-compose.prod.yml)

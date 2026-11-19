@@ -6,6 +6,8 @@ os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].rsplit("/", 1)[0] + "/au
 os.environ["AI_PROVIDER"] = "fake"
 os.environ["QUEUE_INLINE"] = "true"
 os.environ.setdefault("STORAGE_BACKEND", "postgres")
+# Keep password/session auth on for security tests (app defaults to auth off).
+os.environ["AUTH_DISABLED"] = "false"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

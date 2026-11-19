@@ -2,15 +2,16 @@ import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel
-from sqlalchemy import func, select
+from pydantic import BaseModel, Field
+from sqlalchemy import delete as sql_delete, func, select
 from sqlalchemy.orm import Session
 
 from .. import audit, storage
 from ..deps import client_db
-from ..models import FieldConfidence, Invoice, InvoiceLine, ReviewStatus, Shop, Upload, UploadStatus, Vehicle
+from ..models import FieldConfidence, Flag, Invoice, InvoiceLine, ReviewStatus, Shop, Upload, UploadStatus, User, Vehicle
 from ..services import normalize as N
 from ..services.pipeline import page_key
+from .flags import admin_only
 
 router = APIRouter(prefix="/clients/{client_id}/invoices", tags=["invoices"])
 
@@ -182,23 +183,88 @@ def edit_field(invoice_id: uuid.UUID, client_id: uuid.UUID, body: FieldEdit, req
     return {"ok": True}
 
 
+def _check(db: Session, inv: Invoice, uid, now) -> None:
+    ids = [inv.id] + [ln.id for ln in inv.lines]
+    for fc in db.scalars(select(FieldConfidence).where(FieldConfidence.record_id.in_(ids), FieldConfidence.needs_review.is_(True))):
+        fc.needs_review, fc.corrected_by, fc.corrected_at = False, uid, now
+    inv.review_status = ReviewStatus.reviewed
+
+
+def _refresh_uploads(db: Session, upload_ids: set) -> None:
+    """An upload that was waiting on review is done once none of its invoices still needs review."""
+    db.flush()
+    for uid in upload_ids:
+        pending = db.scalar(select(func.count()).select_from(Invoice).where(Invoice.source_upload_id == uid, Invoice.review_status == ReviewStatus.needs_review))
+        up = db.get(Upload, uid)
+        if up and not pending and up.status == UploadStatus.needs_review:
+            up.status = UploadStatus.done
+
+
 @router.post("/{invoice_id}/mark-checked")
 def mark_checked(invoice_id: uuid.UUID, client_id: uuid.UUID, request: Request, db: Session = Depends(client_db)):
     inv = db.get(Invoice, invoice_id)
     if inv is None:
         raise HTTPException(404, "Invoice not found.")
-    ids = [inv.id] + [ln.id for ln in inv.lines]
-    now, uid = datetime.now(timezone.utc), db.info["user_id"]
-    for fc in db.scalars(select(FieldConfidence).where(FieldConfidence.record_id.in_(ids), FieldConfidence.needs_review.is_(True))):
-        fc.needs_review, fc.corrected_by, fc.corrected_at = False, uid, now
-    inv.review_status = ReviewStatus.reviewed
-    db.flush()
-    if inv.source_upload_id:
-        pending = db.scalar(select(func.count()).select_from(Invoice).where(
-            Invoice.source_upload_id == inv.source_upload_id, Invoice.review_status == ReviewStatus.needs_review))
-        up = db.get(Upload, inv.source_upload_id)
-        if up and not pending and up.status == UploadStatus.needs_review:
-            up.status = UploadStatus.done
+    _check(db, inv, db.info["user_id"], datetime.now(timezone.utc))
+    _refresh_uploads(db, {inv.source_upload_id} if inv.source_upload_id else set())
     db.commit()
     audit.record(db, action="edit", object_type="invoice", object_id=inv.id, detail={"op": "mark_checked"}, request=request)
     return {"ok": True, "review_status": inv.review_status.value}
+
+
+class BulkIds(BaseModel):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+
+
+def _owned(db: Session, ids: list[uuid.UUID]) -> list[Invoice]:
+    """Invoices from the list that belong to this client (the session is client-scoped, so other clients' ids simply don't appear)."""
+    return list(db.scalars(select(Invoice).where(Invoice.id.in_(set(ids)))).all())
+
+
+@router.post("/bulk-check")
+def bulk_check(client_id: uuid.UUID, body: BulkIds, request: Request, db: Session = Depends(client_db)):
+    """Mark many invoices as checked at once. The analyst is confirming every highlighted field as read; the audit log records the count."""
+    invs = _owned(db, body.ids)
+    now, uid = datetime.now(timezone.utc), db.info["user_id"]
+    todo = [i for i in invs if i.review_status != ReviewStatus.reviewed]
+    for inv in todo:
+        _check(db, inv, uid, now)
+    _refresh_uploads(db, {i.source_upload_id for i in todo if i.source_upload_id})
+    db.commit()
+    audit.record(db, action="edit", object_type="invoice", detail={"op": "bulk_mark_checked", "count": len(todo), "requested": len(body.ids)}, request=request)
+    return {"checked": len(todo), "already_checked": len(invs) - len(todo), "skipped": len(set(body.ids)) - len(invs)}
+
+
+def _delete_invoices(db: Session, invs: list[Invoice]) -> int:
+    if not invs:
+        return 0
+    ids = [i.id for i in invs]
+    line_ids = list(db.scalars(select(InvoiceLine.id).where(InvoiceLine.invoice_id.in_(ids))))
+    uploads = {i.source_upload_id for i in invs if i.source_upload_id}
+    db.execute(sql_delete(FieldConfidence).where(FieldConfidence.record_id.in_(ids + line_ids)))
+    db.execute(sql_delete(Flag).where(Flag.invoice_id.in_(ids)))
+    db.execute(sql_delete(Flag).where(Flag.related_invoice_id.in_(ids)))      # a flag that points at a deleted invoice as its 'earlier' repair is no longer valid
+    db.execute(sql_delete(InvoiceLine).where(InvoiceLine.invoice_id.in_(ids)))
+    db.execute(sql_delete(Invoice).where(Invoice.id.in_(ids)))
+    _refresh_uploads(db, uploads)
+    return len(ids)
+
+
+@router.post("/bulk-delete")
+def bulk_delete(client_id: uuid.UUID, body: BulkIds, request: Request, _: User = Depends(admin_only), db: Session = Depends(client_db)):
+    """Delete invoices with their lines, confirmation marks and flags. Reports already created are frozen snapshots and are not changed."""
+    invs = _owned(db, body.ids)
+    n = _delete_invoices(db, invs)
+    db.commit()
+    audit.record(db, action="delete", object_type="invoice", detail={"count": n, "requested": len(body.ids)}, request=request)
+    return {"deleted": n, "skipped": len(set(body.ids)) - n}
+
+
+@router.delete("/{invoice_id}", status_code=204)
+def delete_invoice(invoice_id: uuid.UUID, client_id: uuid.UUID, request: Request, _: User = Depends(admin_only), db: Session = Depends(client_db)):
+    inv = db.get(Invoice, invoice_id)
+    if inv is None:
+        raise HTTPException(404, "Invoice not found.")
+    _delete_invoices(db, [inv])
+    db.commit()
+    audit.record(db, action="delete", object_type="invoice", object_id=invoice_id, detail={"count": 1}, request=request)

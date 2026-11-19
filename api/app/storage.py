@@ -8,7 +8,7 @@ from functools import lru_cache
 import boto3
 from botocore.client import Config
 from botocore.exceptions import ClientError
-from sqlalchemy import delete, select
+from sqlalchemy import delete as sql_delete, select  # not 'delete': this module defines its own delete(key)
 
 from .config import get_settings
 from .db import system_session
@@ -88,7 +88,7 @@ def delete_prefix(prefix: str) -> int:
             rows = db.scalars(select(StoredObject.key).where(StoredObject.key.startswith(prefix))).all()
             if not rows:
                 return 0
-            db.execute(delete(StoredObject).where(StoredObject.key.startswith(prefix)))
+            db.execute(sql_delete(StoredObject).where(StoredObject.key.startswith(prefix)))
             db.commit()
             return len(rows)
     s = get_settings()

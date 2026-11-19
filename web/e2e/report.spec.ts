@@ -25,7 +25,7 @@ test("create a report, download the PDF and open the public link", async ({ page
   await page.goBack();
 
   await page.locator("tbody tr").first().getByRole("button", { name: "Copy link" }).click();
-  await expect(page.getByText("Link copied")).toBeVisible();
+  await expect(page.getByText("Link copied").first()).toBeVisible();
   const shared = await page.evaluate(() => navigator.clipboard.readText());
   const token = new URL(shared, "http://localhost:3000").pathname.split("/").pop()!;
 
