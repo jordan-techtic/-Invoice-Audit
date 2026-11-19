@@ -1,8 +1,4 @@
-"""S3-compatible object storage. MinIO locally, AWS S3 (US region, SSE) in production.
-
-Keys are always prefixed with the client id: ``clients/<client_id>/...`` so a
-whole client's raw files can be deleted by prefix.
-"""
+"""Object storage: S3/MinIO in production, optional PostgreSQL blobs for local dev."""
 
 from __future__ import annotations
 
@@ -11,8 +7,15 @@ from functools import lru_cache
 
 import boto3
 from botocore.client import Config
+from botocore.exceptions import ClientError
+from sqlalchemy import delete, select
 
 from .config import get_settings
+from .db import system_session
+
+
+def _use_postgres() -> bool:
+    return get_settings().storage_backend == "postgres"
 
 
 @lru_cache
@@ -29,6 +32,8 @@ def _s3():
 
 
 def ensure_bucket() -> None:
+    if _use_postgres():
+        return
     s = get_settings()
     c = _s3()
     try:
@@ -45,17 +50,47 @@ def client_prefix(client_id: uuid.UUID) -> str:
 
 
 def put(key: str, data: bytes, content_type: str) -> None:
+    if _use_postgres():
+        from .models import StoredObject
+
+        with system_session() as db:
+            row = db.get(StoredObject, key)
+            if row:
+                row.data = data
+                row.content_type = content_type
+            else:
+                db.add(StoredObject(key=key, data=data, content_type=content_type))
+            db.commit()
+        return
     s = get_settings()
     extra = {"ServerSideEncryption": s.s3_sse} if s.s3_sse else {}
     _s3().put_object(Bucket=s.s3_bucket, Key=key, Body=data, ContentType=content_type, **extra)
 
 
 def get(key: str) -> bytes:
+    if _use_postgres():
+        from .models import StoredObject
+
+        with system_session() as db:
+            row = db.get(StoredObject, key)
+            if row is None:
+                raise ClientError({"Error": {"Code": "NoSuchKey", "Message": key}}, "GetObject")
+            return row.data
     s = get_settings()
     return _s3().get_object(Bucket=s.s3_bucket, Key=key)["Body"].read()
 
 
 def delete_prefix(prefix: str) -> int:
+    if _use_postgres():
+        from .models import StoredObject
+
+        with system_session() as db:
+            rows = db.scalars(select(StoredObject.key).where(StoredObject.key.startswith(prefix))).all()
+            if not rows:
+                return 0
+            db.execute(delete(StoredObject).where(StoredObject.key.startswith(prefix)))
+            db.commit()
+            return len(rows)
     s = get_settings()
     c = _s3()
     n = 0
@@ -68,5 +103,13 @@ def delete_prefix(prefix: str) -> int:
 
 
 def delete(key: str) -> None:
+    if _use_postgres():
+        from .models import StoredObject
+
+        with system_session() as db:
+            if row := db.get(StoredObject, key):
+                db.delete(row)
+                db.commit()
+        return
     s = get_settings()
     _s3().delete_object(Bucket=s.s3_bucket, Key=key)

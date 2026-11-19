@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from typing import Callable
 
+from ...config import get_settings
 from .base import ExtractionProvider, RawResponse, Usage
 from .schema import PageExtraction
 
@@ -48,7 +48,7 @@ class FakeProvider(ExtractionProvider):
             text = type(self).scripted.pop(0)
         elif type(self).responder:
             text = type(self).responder(image)
-        elif os.environ.get("FAKE_PROVIDER_DEMO") == "true":
+        elif get_settings().fake_provider_demo:
             text = _demo_page(image)
         else:
             text = PageExtraction(is_invoice=False).model_dump_json()

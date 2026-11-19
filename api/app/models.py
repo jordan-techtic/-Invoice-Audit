@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .db import Base, ClientScoped, IdMixin
+from .db import Base, ClientScoped, IdMixin, utcnow
 
 Money = Numeric(12, 2)
 
@@ -392,6 +392,16 @@ class Report(IdMixin, ClientScoped, Base):
     share_token_enc: Mapped[bytes | None] = mapped_column(LargeBinary)  # so an admin can copy the link again; the DB never holds it in clear
     share_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class StoredObject(Base):
+    """Raw files and derived page images when STORAGE_BACKEND=postgres (local dev without MinIO/S3)."""
+
+    __tablename__ = "stored_objects"
+    key: Mapped[str] = mapped_column(String(500), primary_key=True)
+    data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    content_type: Mapped[str] = mapped_column(String(100), nullable=False, default="application/octet-stream")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
 
 
 class AuditLog(IdMixin, Base):

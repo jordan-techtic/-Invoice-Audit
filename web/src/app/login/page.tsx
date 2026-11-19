@@ -1,15 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { devAutoLogin, devLoginEmail, devLoginPassword } from "@/lib/auth-dev";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(devAutoLogin);
+
+  useEffect(() => {
+    if (!devAutoLogin) return;
+    let live = true;
+    (async () => {
+      try {
+        await api.login(devLoginEmail, devLoginPassword);
+        if (live) router.replace("/clients");
+      } catch (err) {
+        if (!live) return;
+        setError(err instanceof Error ? err.message : "Auto sign-in failed. Is the API running?");
+        setBusy(false);
+      }
+    })();
+    return () => { live = false; };
+  }, [router]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,6 +39,14 @@ export default function LoginPage() {
       setError(err instanceof Error ? err.message : "Sign in failed. Check your details and try again.");
       setBusy(false);
     }
+  }
+
+  if (devAutoLogin && busy && !error) {
+    return (
+      <main className="grid min-h-screen place-items-center px-6 py-10">
+        <p className="text-muted" role="status">Signing in…</p>
+      </main>
+    );
   }
 
   return (

@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     # Encryption key for raw model responses and other sensitive blobs (Fernet, base64 32 bytes)
     data_encryption_key: str = ""  # dev only; set DATA_ENCRYPTION_KEY in prod
 
-    # Object storage (MinIO locally, AWS S3 in production)
+    # Object storage: s3 (MinIO/AWS) or postgres (blobs in stored_objects — no MinIO)
+    storage_backend: str = "s3"  # s3 | postgres
     s3_endpoint_url: str | None = "http://localhost:9000"
     s3_region: str = "us-east-1"
     s3_bucket: str = "invoice-audit"
@@ -30,6 +31,7 @@ class Settings(BaseSettings):
     # AI
     anthropic_api_key: str | None = None
     ai_provider: str = "openai"  # openai | claude | fake | oracle
+    fake_provider_demo: bool = False  # fake provider returns canned invoice data (local/Playwright)
     claude_model: str = "claude-sonnet-5-5"
     openai_api_key: str | None = None
     openai_model: str = "gpt-4o"

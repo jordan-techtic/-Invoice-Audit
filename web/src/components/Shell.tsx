@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { devAutoLogin } from "@/lib/auth-dev";
 import { useSession } from "@/lib/session";
 import { IconClients, IconReports, IconReview, IconUpload } from "./Icons";
 
@@ -49,9 +50,11 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           {user.role === "admin" && (
             <Link href="/admin/audit" className="mt-1 block min-h-[44px] content-center text-sm font-medium text-primary underline underline-offset-4 lg:text-base">Audit log</Link>
           )}
-          <button onClick={signOut} className="mt-1 min-h-[44px] rounded-md px-1 text-sm font-medium text-primary underline underline-offset-4 lg:px-0 lg:text-base">
-            Sign out
-          </button>
+          {!devAutoLogin && (
+            <button onClick={signOut} className="mt-1 min-h-[44px] rounded-md px-1 text-sm font-medium text-primary underline underline-offset-4 lg:px-0 lg:text-base">
+              Sign out
+            </button>
+          )}
         </div>
       </aside>
       <div className="min-w-0 pl-[72px] lg:col-start-2 lg:pl-0">

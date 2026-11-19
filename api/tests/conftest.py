@@ -5,6 +5,7 @@ os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://audit:audit@db:5432/
 os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].rsplit("/", 1)[0] + "/audit_test"
 os.environ["AI_PROVIDER"] = "fake"
 os.environ["QUEUE_INLINE"] = "true"
+os.environ.setdefault("STORAGE_BACKEND", "postgres")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

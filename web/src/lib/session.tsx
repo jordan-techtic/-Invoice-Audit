@@ -3,6 +3,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, setUnauthorizedHandler, type Client, type User } from "./api";
+import { devAutoLogin, devLoginEmail, devLoginPassword } from "./auth-dev";
+
+async function loadUser(): Promise<User> {
+  try {
+    return await api.me();
+  } catch {
+    if (!devAutoLogin) throw new Error("unauthenticated");
+    await api.login(devLoginEmail, devLoginPassword);
+    return await api.me();
+  }
+}
 
 interface Session {
   user: User;
@@ -33,7 +44,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     let live = true;
     (async () => {
       try {
-        const me = await api.me();
+        const me = await loadUser();
         const list = await api.clients();
         if (!live) return;
         let saved: string | null = null;

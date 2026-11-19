@@ -19,6 +19,19 @@ creates the report and PDF (`demo/sample_report.pdf`) and prints the numbers. Wi
 **Without a key it uses an offline oracle that replays the answer key with injected errors; everything after reading is real,
 but the reading accuracy it reports is not a model result.**
 
+## Local without Docker
+
+PostgreSQL, Node.js, and Python 3.11+ on the host. With `QUEUE_INLINE=true` you do not need Redis or an RQ worker. Set
+`STORAGE_BACKEND=postgres` in `api/.env` to keep uploaded files in the database (no MinIO).
+
+1. **Database** — create role `audit` / password `audit` and databases `audit` and `audit_test` (see `infra/postgres-init.sql`).
+   If port 5433 is in use, point `DATABASE_URL` at 5432 in `api/.env`.
+2. **API** — `cp api/.env.example api/.env`, then `./scripts/dev-local.sh` (or follow the manual steps inside the script).
+3. **Web** — `cd web && npm install && API_URL=http://127.0.0.1:8000 npm run dev` (dev mode auto-signs in as `admin@audit-demo.com`; set `NEXT_PUBLIC_AUTO_LOGIN=false` to show the login page)
+4. **File storage** — default in `api/.env.example` is `STORAGE_BACKEND=postgres`. Use MinIO only if you set `STORAGE_BACKEND=s3`.
+
+Demo logins: `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.com` / `analyst-password-123`.
+
 ## How to run an audit
 1. **Create the client.** Admin: *Clients -> Add client*. Open *Settings* to check the warranty rules (defaults for ~16
    components) and, optionally, import licensed labour benchmarks (CSV: `vmrs_code, benchmark_hours`).
@@ -52,7 +65,7 @@ but the reading accuracy it reports is not a model result.**
 `RAW_FILE_RETENTION_DAYS` (90). Per-client thresholds (labour %, repeat days/miles, parts %, severity bands, retention) are
 editable via `PATCH /clients/{id}` settings. Report branding and the default offer text: `api/app/report_settings.json`.
 Prompts: `api/app/prompts/*.txt`. Run `make config-check` to list what is not set for production;
-`docker-compose.prod.yml` adds TLS.
+`docker-compose.prod.yml` adds TLS. For non-Docker API runs, copy `api/.env.example` to `api/.env`.
 
 ## Tests
 `make test` runs the backend suite. For the synthetic-data cases mount the set:
