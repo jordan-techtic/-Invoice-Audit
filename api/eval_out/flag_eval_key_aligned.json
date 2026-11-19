@@ -22,7 +22,14 @@
       "found": 11,
       "recall_pct": 91.7,
       "precision_pct": 100.0,
-      "planted_dollars": 1498.6
+      "planted_dollars": 1498.6,
+      "missed": [
+        {
+          "key_id": "INV-0096",
+          "line": 2,
+          "dollars": 105.6
+        }
+      ]
     },
     "repeat_repair": {
       "planted": 9,
@@ -34,7 +41,14 @@
       "found": 8,
       "recall_pct": 88.9,
       "precision_pct": 100.0,
-      "planted_dollars": 2788.96
+      "planted_dollars": 2788.96,
+      "missed": [
+        {
+          "key_id": "INV-0124",
+          "line": 1,
+          "dollars": 131.56
+        }
+      ]
     },
     "warranty_eligible": {
       "planted": 7,
@@ -46,7 +60,8 @@
       "found": 7,
       "recall_pct": 100.0,
       "precision_pct": 100.0,
-      "planted_dollars": 6325.11
+      "planted_dollars": 6325.11,
+      "missed": []
     },
     "parts_price_outlier": {
       "planted": 10,
@@ -58,7 +73,24 @@
       "found": 7,
       "recall_pct": 70.0,
       "precision_pct": 100.0,
-      "planted_dollars": 1754.58
+      "planted_dollars": 1754.58,
+      "missed": [
+        {
+          "key_id": "INV-0110",
+          "line": 1,
+          "dollars": 52.69
+        },
+        {
+          "key_id": "INV-0112",
+          "line": 2,
+          "dollars": 288.2
+        },
+        {
+          "key_id": "INV-0144",
+          "line": 1,
+          "dollars": 402.25
+        }
+      ]
     },
     "duplicate": {
       "planted": 4,
@@ -70,7 +102,8 @@
       "found": 4,
       "recall_pct": 100.0,
       "precision_pct": 100.0,
-      "planted_dollars": 6198.5
+      "planted_dollars": 6198.5,
+      "missed": []
     },
     "math_error": {
       "planted": 12,
@@ -82,7 +115,8 @@
       "found": 12,
       "recall_pct": 100.0,
       "precision_pct": 100.0,
-      "planted_dollars": 475.39
+      "planted_dollars": 475.39,
+      "missed": []
     }
   },
   "run_summary": {
@@ -100,9 +134,11 @@
     ],
     "invoices": 204,
     "benchmarked_job_types": 26,
-    "priced_parts": 43
+    "priced_parts": 43,
+    "added": 50,
+    "removed": 0
   },
-  "engine_seconds": 0.19,
+  "engine_seconds": 0.32,
   "explanation_cost_usd": 0.08575,
   "explanation_tokens": [
     14700,

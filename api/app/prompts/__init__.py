@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 
 _DIR = Path(__file__).parent
-PROMPT_VERSION = "p3-1"  # bump when prompts change meaningfully; part of the explanation cache key
+PROMPT_VERSION = "p3-2"  # bump when prompts change meaningfully; part of the explanation cache key
 
 
 @lru_cache

@@ -242,9 +242,11 @@
     ],
     "invoices": 204,
     "benchmarked_job_types": 26,
-    "priced_parts": 43
+    "priced_parts": 43,
+    "added": 56,
+    "removed": 0
   },
-  "engine_seconds": 0.19,
+  "engine_seconds": 0.2,
   "explanation_cost_usd": 0.09275,
   "explanation_tokens": [
     15900,

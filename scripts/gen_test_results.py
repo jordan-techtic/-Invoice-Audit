@@ -155,7 +155,7 @@ case(23, "Deletion job removes raw files on schedule, audit log records it", S(t
 if DEMO:
     ok = DEMO["report"]["pdf_bytes"] > 0 and (ROOT / "demo" / "sample_report.pdf").exists()
     case(24, "`make demo` does everything from a clean state", "PASS" if ok else "FAIL",
-         f"Created client, loaded {DEMO['files']} files -> {DEMO['invoices']} invoices, ran checks ({DEMO['flags']} flags), accepted {DEMO['accepted']} matching the key, dismissed {DEMO['dismissed']}, report ${DEMO['report']['recoverable']:,.2f}, PDF {DEMO['report']['pdf_bytes']:,} bytes at demo/sample_report.pdf.",
+         f"Created client, loaded {DEMO['files']} files -> {DEMO['invoices']} invoices, ran checks ({DEMO['flags']} flags), accepted {DEMO['accepted']} matching the key ({DEMO.get('amount_corrected', 0)} with the amount corrected, as an analyst would after looking at the image), dismissed {DEMO['dismissed']}, report ${DEMO['report']['recoverable']:,.2f}, PDF {DEMO['report']['pdf_bytes']:,} bytes at demo/sample_report.pdf.",
          "Mode: " + ("OFFLINE ORACLE (no AI key)" if DEMO["mode"] == "offline_oracle" else "real AI"))
 else:
     case(24, "`make demo` does everything from a clean state", "FAIL", "demo/summary.json missing")

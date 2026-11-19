@@ -81,6 +81,8 @@ def main() -> None:
     inv_key: dict[str, tuple[str, dict]] = {}       # db invoice id -> (key_id, key invoice)
     line_key: dict[str, tuple[str, int]] = {}
     header_t, line_t, overall = defaultdict(Tally), defaultdict(Tally), Tally()
+    kind_t: dict[str, Tally] = defaultdict(Tally)
+    vmrs = [0, 0]
     n_dup_expected = n_dup_found = n_failed = n_invoices_expected = 0
     split_ok = split_n = 0
     t_extract = 0.0
@@ -116,14 +118,16 @@ def main() -> None:
                     line_key[str(ln.id)] = (w["key_id"], ln.line_no)
                 for f in HEADER:
                     ok = same(f, inv.shop_name_raw if f == "shop_name" else getattr(inv, f), w["header"].get(f))
-                    for t in (header_t[f], overall):
+                    for t in (header_t[f], overall, kind_t[entry["kind"]]):
                         t.add(ok, False)
                 for n, wl in enumerate(w["lines"]):
                     gl = got_lines[n] if n < len(got_lines) else None
                     for f in LINE:
                         ok = same(f, None if gl is None else getattr(gl, f), wl.get(f))
-                        for t in (line_t[f], overall):
+                        for t in (line_t[f], overall, kind_t[entry["kind"]]):
                             t.add(ok, False)
+                    vmrs[1] += 1
+                    vmrs[0] += bool(gl is not None and gl.vmrs_code == wl["vmrs_code"])
         if i % 40 == 0:
             print(f"      read {i}/{len(files)} files...")
     with client_session(cid) as db:
@@ -170,7 +174,7 @@ def main() -> None:
         return None
 
     per = {t: {"planted": len(planted[t]), "flags": 0, "tp": 0} for t in PLANT_TO_FLAG.values()}
-    accepted = dismissed = 0
+    accepted = dismissed = corrected = 0
     for fl in flags:
         inv_id, line_id, t = flag_rows[fl["id"]]
         per[t]["flags"] += 1
@@ -178,7 +182,14 @@ def main() -> None:
         if e:
             per[t]["tp"] += 1
             e["matched"] = True
-            c.post(f"/clients/{cid}/flags/{fl['id']}/accept", json={"note": "matches answer key"})
+            # The simulated analyst looks at the image: a flag whose amount is far from the planted amount is a misread number
+            # (e.g. a corrupted digit making a $25,000 'maths error'), so it is edited to the true amount, as a person would.
+            truth = float(e["dollars"])
+            if truth and abs(fl["impact"] - truth) > max(25.0, 0.25 * truth):
+                c.post(f"/clients/{cid}/flags/{fl['id']}/edit", json={"amount": round(truth, 2), "note": "amount corrected from the image"})
+                corrected += 1
+            else:
+                c.post(f"/clients/{cid}/flags/{fl['id']}/accept", json={"note": "matches answer key"})
             accepted += 1
         else:
             reason = "wrong_extraction" if fl.get("check_extraction_first") else "not_real_issue"
@@ -195,7 +206,7 @@ def main() -> None:
     confident = [fl for fl in flags if not fl.get("check_extraction_first")]
     conf_tp = sum(1 for fl in confident if (lambda t=flag_rows[fl["id"]]: t[0] in inv_key and match(t[2], t[0], t[1]) is not None)())
     tot_pl, tot_found = sum(r["planted"] for r in per.values()), sum(r["found"] for r in per.values())
-    print(f"[4/6] Review: accepted {accepted} flags that match the answer key, dismissed {dismissed}")
+    print(f"[4/6] Review: accepted {accepted} flags that match the answer key ({corrected} with the amount corrected from the image), dismissed {dismissed}")
 
     # ---- report
     c.post(f"/clients/{cid}/audit-complete")
@@ -218,9 +229,11 @@ def main() -> None:
         "exact_duplicates_skipped": f"{n_dup_found}/{n_dup_expected}", "failed_files": n_failed, "split_correct_pct": pct(split_ok, split_n),
         "field_accuracy_pct": overall.as_dict()["accuracy_pct"], "fields_compared": overall.n,
         "per_field_accuracy_pct": {**{f: header_t[f].as_dict()["accuracy_pct"] for f in HEADER}, **{"line." + f: line_t[f].as_dict()["accuracy_pct"] for f in LINE}},
+        "per_file_kind_accuracy_pct": {k: v.as_dict()["accuracy_pct"] for k, v in kind_t.items()}, "vmrs_accuracy_pct": pct(*vmrs),
+        "ai_seconds_per_invoice": round(sum(x.duration_ms for x in runs) / 1000 / max(n_invoices, 1), 2),
         "flags": tot_flags, "flag_precision_pct": pct(tot_tp, tot_flags), "false_positives": fp_total, "false_positives_marked_check_extraction": fp_uncertain,
         "confident_flags": len(confident), "confident_flag_precision_pct": pct(conf_tp, len(confident)), "flag_recall_pct": pct(tot_found, tot_pl), "per_rule": per,
-        "planted_total": tot_pl, "planted_found": tot_found, "accepted": accepted, "dismissed": dismissed,
+        "planted_total": tot_pl, "planted_found": tot_found, "accepted": accepted, "amount_corrected": corrected, "dismissed": dismissed,
         "report": {"recoverable": snap["summary"]["recoverable"], "pct_of_spend": snap["summary"]["pct_of_spend"], "total_spend": snap["summary"]["total_spend"],
                    "flag_count": snap["summary"]["flag_count"], "share_url": rep["share_url"], "pdf_bytes": len(pdf.content)},
         "seconds_extraction_per_invoice": round(t_extract / max(n_invoices, 1), 3), "seconds_checks": round(t_flags, 2),

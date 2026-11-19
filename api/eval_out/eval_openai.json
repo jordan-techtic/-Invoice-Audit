@@ -1,0 +1,301 @@
+{
+  "provider": "openai",
+  "model": "gpt-4o",
+  "files": 5,
+  "invoices": 14,
+  "overall": {
+    "fields": 553,
+    "accuracy_pct": 96.56,
+    "sent_to_review_pct": 1.45,
+    "wrong": 19,
+    "wrong_caught_pct": 15.79
+  },
+  "header_only": {
+    "fields": 140,
+    "accuracy_pct": 95.71,
+    "sent_to_review_pct": 5.71,
+    "wrong": 6,
+    "wrong_caught_pct": 50.0
+  },
+  "per_field": {
+    "shop_name": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "shop_address": {
+      "fields": 14,
+      "accuracy_pct": 78.57,
+      "sent_to_review_pct": 0.0,
+      "wrong": 3,
+      "wrong_caught_pct": 0.0
+    },
+    "invoice_number": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "invoice_date": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "unit_number": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "vin": {
+      "fields": 14,
+      "accuracy_pct": 78.57,
+      "sent_to_review_pct": 21.43,
+      "wrong": 3,
+      "wrong_caught_pct": 100.0
+    },
+    "odometer": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "subtotal": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 21.43,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "tax": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "total": {
+      "fields": 14,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 14.29,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "line.description": {
+      "fields": 59,
+      "accuracy_pct": 98.31,
+      "sent_to_review_pct": 0.0,
+      "wrong": 1,
+      "wrong_caught_pct": 0.0
+    },
+    "line.part_number": {
+      "fields": 59,
+      "accuracy_pct": 98.31,
+      "sent_to_review_pct": 0.0,
+      "wrong": 1,
+      "wrong_caught_pct": 0.0
+    },
+    "line.qty": {
+      "fields": 59,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "line.parts_price": {
+      "fields": 59,
+      "accuracy_pct": 86.44,
+      "sent_to_review_pct": 0.0,
+      "wrong": 8,
+      "wrong_caught_pct": 0.0
+    },
+    "line.labour_hours": {
+      "fields": 59,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "line.labour_rate": {
+      "fields": 59,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 0.0,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "line.line_total": {
+      "fields": 59,
+      "accuracy_pct": 94.92,
+      "sent_to_review_pct": 0.0,
+      "wrong": 3,
+      "wrong_caught_pct": 0.0
+    }
+  },
+  "per_file_kind": {
+    "multi_pdf": {
+      "fields": 449,
+      "accuracy_pct": 97.1,
+      "sent_to_review_pct": 1.56,
+      "wrong": 13,
+      "wrong_caught_pct": 15.38
+    },
+    "clean_pdf": {
+      "fields": 104,
+      "accuracy_pct": 94.23,
+      "sent_to_review_pct": 0.96,
+      "wrong": 6,
+      "wrong_caught_pct": 16.67
+    }
+  },
+  "vmrs_accuracy_pct": 96.61,
+  "vmrs_sources": {
+    "lookup": 36,
+    "none": 16,
+    "cache": 5,
+    "ai": 2
+  },
+  "split_correct_pct": 100.0,
+  "exact_duplicates_caught": "0/0",
+  "failed_files": 0,
+  "avg_wall_seconds_per_invoice": 10.145,
+  "avg_ai_seconds_per_invoice": 9.61,
+  "avg_cost_usd_per_invoice": 0.0187,
+  "total_cost_usd": 0.26,
+  "examples": {
+    "line_parts_price": [
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "12.00",
+        "None"
+      ],
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "12.00",
+        "None"
+      ],
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "6.61",
+        "None"
+      ],
+      [
+        "multi/multi_0003.pdf",
+        "multi_pdf",
+        "6.00",
+        "None"
+      ],
+      [
+        "pdf/inv_0001.pdf",
+        "clean_pdf",
+        "25.00",
+        "None"
+      ],
+      [
+        "pdf/inv_0001.pdf",
+        "clean_pdf",
+        "25.00",
+        "None"
+      ]
+    ],
+    "line_line_total": [
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "None",
+        "12.0"
+      ],
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "None",
+        "12.0"
+      ],
+      [
+        "multi/multi_0003.pdf",
+        "multi_pdf",
+        "None",
+        "6.0"
+      ]
+    ],
+    "shop_address": [
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "1920 Outer Loop, Louisville, KY 40219 - (502) 555-0152",
+        "1920 Outer Loop, Louisville, KY 40219"
+      ],
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "4120 Industrial Blvd, Dallas, TX 75247 Phone (214) 555-0139",
+        "4120 Industrial Blvd, Dallas, TX 75247"
+      ],
+      [
+        "pdf/inv_0002.pdf",
+        "clean_pdf",
+        "2630 Moreland Ave, Memphis, TN 38118 Tel: (901) 555-0183",
+        "2630 Moreland Ave, Memphis, TN 38118"
+      ]
+    ],
+    "vin": [
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "4V4FB7V65NE874633",
+        "4V4F7BV65NE874633"
+      ],
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "4V4321RK2NF223307",
+        "4V43Z1RK2NF223307"
+      ],
+      [
+        "pdf/inv_0002.pdf",
+        "clean_pdf",
+        "1XP54EPW1KH252427",
+        "1XPS4EPW1KH252427"
+      ]
+    ],
+    "vmrs": [
+      [
+        "multi/multi_0002.pdf",
+        "R&R w/pump & thermostat",
+        "042-001-003",
+        "042-001-002"
+      ],
+      [
+        "pdf/inv_0001.pdf",
+        "Oil/filter kit DD15 w/ fuel filter",
+        "044-001-002",
+        "045-001-001"
+      ]
+    ],
+    "line_part_number": [
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "TR-1R2255",
+        "TR-11R225S"
+      ]
+    ],
+    "line_description": [
+      [
+        "multi/multi_0003.pdf",
+        "multi_pdf",
+        "LEAKING HUB SEAL BOTH SIDES, REPLACED SEAL & REPACKED ENVIRONMENTAL/DISPOSAL",
+        "LEAKING HUB SEAL BOTH SIDES, REPLACED SEAL & REPACKED"
+      ]
+    ]
+  }
+}

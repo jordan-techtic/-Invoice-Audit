@@ -1,4 +1,5 @@
 import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import { makePng } from "./png";
 
 export async function apiLogin(request: APIRequestContext) {
   const res = await request.post("/api/auth/login", { data: { email: "admin@audit-demo.com", password: "admin-password-123" } });
@@ -8,8 +9,27 @@ export async function apiLogin(request: APIRequestContext) {
   return cid;
 }
 
+/** The demo provider turns every uploaded image into one invoice (same shop, unit, date and total), so a few uploads
+ *  give the duplicate rule something to find. Only uploads when the client has no invoices, so specs work on a fresh database. */
+async function ensureInvoices(request: APIRequestContext, cid: string) {
+  const have = await (await request.get(`/api/clients/${cid}/invoices`)).json();
+  if (have.length >= 4) return;
+  for (let i = 0; i < 4; i++) {
+    const res = await request.post(`/api/clients/${cid}/uploads`, {
+      multipart: { files: { name: `seed-${Date.now()}-${i}.png`, mimeType: "image/png", buffer: makePng(Date.now() + i * 7919) } },
+    });
+    expect(res.ok()).toBeTruthy();
+  }
+  for (let i = 0; i < 40; i++) {
+    const ups = await (await request.get(`/api/clients/${cid}/uploads`)).json();
+    if (!ups.some((u: { status: string }) => u.status === "queued" || u.status === "reading")) break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+}
+
 /** Makes sure checks have run, then returns every flag for the client. */
 export async function ensureFlags(request: APIRequestContext, cid: string) {
+  await ensureInvoices(request, cid);
   const run = await (await request.post(`/api/clients/${cid}/run-flags`)).json();
   for (let i = 0; i < 40; i++) {
     const r = await (await request.get(`/api/clients/${cid}/flag-runs/${run.job_id}`)).json();

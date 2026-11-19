@@ -184,10 +184,10 @@
   "split_correct_pct": 100.0,
   "exact_duplicates_caught": "4/4",
   "failed_files": 0,
-  "avg_wall_seconds_per_invoice": 1.073,
+  "avg_wall_seconds_per_invoice": 0.984,
   "avg_ai_seconds_per_invoice": 0.008,
-  "avg_cost_usd_per_invoice": 0.0158,
-  "total_cost_usd": 3.22,
+  "avg_cost_usd_per_invoice": 0.0115,
+  "total_cost_usd": 2.34,
   "examples": {
     "invoice_date": [
       [
