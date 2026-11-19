@@ -1,19 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { api, setUnauthorizedHandler, type Client, type User } from "./api";
-import { devAutoLogin, devLoginEmail, devLoginPassword } from "./auth-dev";
-
-async function loadUser(): Promise<User> {
-  try {
-    return await api.me();
-  } catch {
-    if (!devAutoLogin) throw new Error("unauthenticated");
-    await api.login(devLoginEmail, devLoginPassword);
-    return await api.me();
-  }
-}
 
 interface Session {
   user: User;
@@ -21,7 +9,6 @@ interface Session {
   client: Client | null;
   chooseClient: (c: Client) => void;
   refreshClients: () => Promise<void>;
-  signOut: () => Promise<void>;
 }
 
 const Ctx = createContext<Session | null>(null);
@@ -34,17 +21,17 @@ export function useSession(): Session {
 }
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setUnauthorizedHandler(() => router.replace("/login"));
+    setUnauthorizedHandler(() => { window.location.href = "/clients"; });
     let live = true;
     (async () => {
       try {
-        const me = await loadUser();
+        const me = await api.me();
         const list = await api.clients();
         if (!live) return;
         let saved: string | null = null;
@@ -52,29 +39,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         setClients(list);
         setClientId(list.some((c) => c.id === saved) ? saved : null);
         setUser(me);
-      } catch {
-        if (live) router.replace("/login");
+      } catch (e) {
+        if (live) setError(e instanceof Error ? e.message : "Could not load session");
       }
     })();
     return () => { live = false; setUnauthorizedHandler(null); };
-  }, [router]);
+  }, []);
 
   const chooseClient = useCallback((c: Client) => {
     setClientId(c.id);
     try { localStorage.setItem(KEY, c.id); } catch { /* ignore */ }
   }, []);
   const refreshClients = useCallback(async () => { setClients(await api.clients()); }, []);
-  const signOut = useCallback(async () => {
-    try { await api.logout(); } catch { /* cookie may already be gone */ }
-    try { localStorage.removeItem(KEY); } catch { /* ignore */ }
-    router.replace("/login");
-  }, [router]);
 
   const value = useMemo<Session | null>(() => user && {
     user, clients, client: clients.find((c) => c.id === clientId) ?? null,
-    chooseClient, refreshClients, signOut,
-  }, [user, clients, clientId, chooseClient, refreshClients, signOut]);
+    chooseClient, refreshClients,
+  }, [user, clients, clientId, chooseClient, refreshClients]);
 
+  if (error) return <p className="p-10 text-danger" role="alert">{error}</p>;
   if (!value) return <p className="p-10 text-muted" role="status">Loading…</p>;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

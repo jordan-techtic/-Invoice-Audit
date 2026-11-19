@@ -27,7 +27,7 @@ PostgreSQL, Node.js, and Python 3.11+ on the host. With `QUEUE_INLINE=true` you 
 1. **Database** — create role `audit` / password `audit` and databases `audit` and `audit_test` (see `infra/postgres-init.sql`).
    If port 5433 is in use, point `DATABASE_URL` at 5432 in `api/.env`.
 2. **API** — `cp api/.env.example api/.env`, then `./scripts/dev-local.sh` (or follow the manual steps inside the script).
-3. **Web** — `cd web && npm install && API_URL=http://127.0.0.1:8000 npm run dev` (dev mode auto-signs in as `admin@audit-demo.com`; set `NEXT_PUBLIC_AUTO_LOGIN=false` to show the login page)
+3. **Web** — `cd web && npm install && API_URL=http://127.0.0.1:8000 npm run dev`. With `AUTH_DISABLED=true` in `api/.env`, no sign-in screen (acts as admin).
 4. **File storage** — default in `api/.env.example` is `STORAGE_BACKEND=postgres`. Use MinIO only if you set `STORAGE_BACKEND=s3`.
 
 Demo logins: `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.com` / `analyst-password-123`.

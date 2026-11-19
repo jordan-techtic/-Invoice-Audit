@@ -9,6 +9,7 @@ from fastapi import Cookie, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .config import get_settings
 from .db import SessionLocal, bind_client
 from .models import Client, Role, User, UserClient
 from .security import decode_token
@@ -24,11 +25,24 @@ def get_session() -> Iterator[Session]:
         db.close()
 
 
+def _bypass_user(db: Session) -> User:
+    user = db.scalars(
+        select(User).where(User.role == Role.admin, User.is_active.is_(True)).order_by(User.created_at).limit(1)
+    ).first()
+    if user is None:
+        user = db.scalars(select(User).where(User.is_active.is_(True)).limit(1)).first()
+    if user is None:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "No users in database. Run: python -m app.seed")
+    return user
+
+
 def current_user(
     request: Request,
     db: Session = Depends(get_session),
     audit_session: str | None = Cookie(default=None),
 ) -> User:
+    if get_settings().auth_disabled:
+        return _bypass_user(db)
     token = audit_session
     auth = request.headers.get("authorization", "")
     if not token and auth.lower().startswith("bearer "):

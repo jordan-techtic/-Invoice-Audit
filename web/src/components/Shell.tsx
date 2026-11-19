@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { devAutoLogin } from "@/lib/auth-dev";
 import { useSession } from "@/lib/session";
 import { IconClients, IconReports, IconReview, IconUpload } from "./Icons";
 
@@ -15,7 +14,7 @@ const NAV = [
 
 export default function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
-  const { user, client, signOut } = useSession();
+  const { user, client } = useSession();
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
       <aside className="no-print fixed inset-y-0 left-0 z-10 flex w-[72px] flex-col bg-sunken lg:w-[232px]">
@@ -49,11 +48,6 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <p className="hidden text-sm capitalize text-muted lg:block">{user.role}</p>
           {user.role === "admin" && (
             <Link href="/admin/audit" className="mt-1 block min-h-[44px] content-center text-sm font-medium text-primary underline underline-offset-4 lg:text-base">Audit log</Link>
-          )}
-          {!devAutoLogin && (
-            <button onClick={signOut} className="mt-1 min-h-[44px] rounded-md px-1 text-sm font-medium text-primary underline underline-offset-4 lg:px-0 lg:text-base">
-              Sign out
-            </button>
           )}
         </div>
       </aside>

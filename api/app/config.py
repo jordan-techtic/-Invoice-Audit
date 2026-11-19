@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     env: str = "local"
+    auth_disabled: bool = False  # local only: skip login; every request acts as the first admin
     database_url: str = "postgresql+psycopg://audit:audit@localhost:5433/audit"
     redis_url: str = "redis://localhost:6380/0"
 
