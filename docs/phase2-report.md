@@ -12,8 +12,7 @@ To get the real number: put a key in `.env`, set `AI_ZDR_CONFIRMED=true` (the Cl
 without it), then run:
 
 ```
-docker compose run --rm -v $PWD/api:/app -v $PWD/synthetic:/synthetic api \
-  python -m eval.run_eval --synthetic /synthetic/out --provider claude
+cd api && .venv/bin/python -m eval.run_eval --synthetic ../synthetic/out --provider claude
 ```
 
 Output goes to `api/eval_out/eval_claude.json`. If it is below 90%, the worst fields are listed in that file

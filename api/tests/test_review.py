@@ -130,3 +130,28 @@ def test_flags_built_on_unsure_extraction_say_so(admin_client, world):
     assert again["check_extraction_first"] is True
     d2 = admin_client.get(f"/clients/{cid}/flags/{lab['id']}").json()
     assert d2["evidence_lines"][0].startswith("Some numbers behind this flag were hard to read")
+
+
+def test_bulk_accept_dismiss_reopen(admin_client, world):
+    cid = world["a"]
+    flags = setup_flags(admin_client, cid)
+    ids = [f["id"] for f in flags[:2]]
+    url = f"/clients/{cid}/flags/bulk"
+    stranger = "00000000-0000-0000-0000-000000000000"
+
+    r = admin_client.post(url, json={"ids": ids + [stranger], "action": "accept"}).json()
+    assert r == {"changed": 2, "unchanged": 0, "skipped": 1}
+    assert all(admin_client.get(f"/clients/{cid}/flags/{i}").json()["status"] == "accepted" for i in ids)
+    assert admin_client.post(url, json={"ids": ids, "action": "accept"}).json()["unchanged"] == 2
+
+    assert admin_client.post(url, json={"ids": ids, "action": "dismiss"}).status_code == 422
+    assert admin_client.post(url, json={"ids": ids, "action": "delete"}).status_code == 422
+    r = admin_client.post(url, json={"ids": ids, "action": "dismiss", "reason": "not_real_issue", "note": "bulk"}).json()
+    assert r["changed"] == 2
+    d = admin_client.get(f"/clients/{cid}/flags/{ids[0]}").json()
+    assert d["status"] == "dismissed" and d["dismiss_reason"] == "not_real_issue" and d["note"] == "bulk" and d["reviewed_by"]
+
+    assert admin_client.post(url, json={"ids": ids, "action": "reopen"}).json()["changed"] == 2
+    assert admin_client.get(f"/clients/{cid}/flags/{ids[0]}").json()["status"] == "open"
+    ops = [(r_["detail"] or {}).get("op") for r_ in audit_rows(admin_client, cid)]
+    assert {"bulk_accept", "bulk_dismiss", "bulk_reopen"} <= set(ops)

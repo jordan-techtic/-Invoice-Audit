@@ -1,8 +1,0 @@
-__pycache__
-.pytest_cache
-*.pyc
-.venv
-# secrets must never be copied into an image (COPY . . would put the OpenAI key in every layer)
-.env
-.env.*
-*.env

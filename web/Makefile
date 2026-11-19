@@ -1,19 +1,24 @@
-# Frontend only. Run from web/.
-.PHONY: network up down dev test
+# Frontend only, on the host (no Docker). Run from web/. Needs a backend on API_URL (default http://127.0.0.1:8000).
+.PHONY: install dev build start test
 
-network:
-	@docker network inspect invoice-audit >/dev/null 2>&1 || docker network create invoice-audit
+API_URL ?= http://127.0.0.1:8000
+export API_URL
 
-up: network
-	docker compose up -d --build
+node_modules:
+	npm install
 
-down:
-	docker compose down
+install: node_modules
 
-# No Docker: needs a backend on API_URL (default http://127.0.0.1:8000)
-dev:
-	API_URL=$(or $(API_URL),http://127.0.0.1:8000) npm run dev
+dev: node_modules
+	npm run dev
+
+# Production build. The /api proxy target (API_URL) is fixed at build time.
+build: node_modules
+	npm run build
+
+start:
+	npm run start
 
 # Playwright; the backend must be running with AI_PROVIDER=fake FAKE_PROVIDER_DEMO=true
-test:
+test: node_modules
 	npx playwright test

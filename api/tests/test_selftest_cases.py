@@ -1,9 +1,10 @@
-"""Self-test cases 1-5 and 8 on the synthetic invoices. Needs /synthetic/out (mounted by `make test-selftest`/demo); skipped if absent.
+"""Self-test cases 1-5 and 8 on the synthetic invoices. Needs the generated set (SYNTHETIC_DIR, default ../synthetic/out; `make demo` generates it); skipped if absent.
 
 Where a case needs a real model to read pixels it is split in two: the part that is real here (preprocessing, splitting,
 status handling) and the part that uses the OFFLINE ORACLE (replays the answer key). The oracle never looks at an image."""
 
 import io
+import os
 import json
 import random
 from pathlib import Path
@@ -22,8 +23,8 @@ from eval.run_eval import HEADER, same
 
 from .helpers import page_json, pdf_bytes, png_bytes, script
 
-SYN = Path("/synthetic/out")
-pytestmark = pytest.mark.skipif(not (SYN / "answer_key.json").exists(), reason="synthetic set not mounted at /synthetic/out")
+SYN = Path(os.environ.get("SYNTHETIC_DIR", "../synthetic/out"))
+pytestmark = pytest.mark.skipif(not (SYN / "answer_key.json").exists(), reason=f"synthetic set not found at {SYN} (set SYNTHETIC_DIR)")
 
 
 @pytest.fixture(scope="module")

@@ -12,7 +12,7 @@ Assumptions where the design plan was silent (one line each):
 - Fields save on blur or Enter; a saved field is cleared of its Check marker immediately, then the invoice is re-read to pick up normalised values.
 - "Mark as checked" waits for any save still in flight before it posts.
 - Lint script is `eslint .` because `next lint` no longer exists in Next 16.
-- The API proxy reads API_URL at build time (rewrites are baked into the standalone build); the Dockerfile takes it as a build arg, default http://api:8000.
+- The API proxy reads API_URL at build time (rewrites are baked into `next build`); set it before building.
 - `proxyClientMaxBodySize` is raised to 30 MB so 25 MB uploads pass through the /api proxy.
 - Flags and Invoices are tabs inside Review; the flags e2e test mocks the flags endpoints, and the settings page is built to the contract but not yet run against the real API.
 - Review nav goes to /review (flags, then Invoices tab); /flags redirects there. The open-flag list for J/K and "x of y" reuses the review filters saved in sessionStorage.

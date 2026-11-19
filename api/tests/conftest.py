@@ -1,7 +1,17 @@
 import os
 import uuid
 
-os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://audit:audit@db:5432/audit_test")
+def _env_file_db_url() -> str | None:
+    """DATABASE_URL from api/.env, so `make test` uses the same server as the app (always swapped to the audit_test database below)."""
+    p = os.path.join(os.path.dirname(__file__), "..", ".env")
+    if os.path.exists(p):
+        for line in open(p):
+            if line.strip().startswith("DATABASE_URL="):
+                return line.split("=", 1)[1].strip().strip("'\"")
+    return None
+
+
+os.environ.setdefault("DATABASE_URL", _env_file_db_url() or "postgresql+psycopg://audit:audit@127.0.0.1:5432/audit_test")
 os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].rsplit("/", 1)[0] + "/audit_test"
 os.environ["AI_PROVIDER"] = "fake"
 os.environ["QUEUE_INLINE"] = "true"

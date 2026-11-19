@@ -377,13 +377,6 @@ def test_audit_log_records_views_edits_exports_and_is_admin_browsable(admin_clie
     assert len(admin_client.get(f"/admin/audit-log?client_id={cid}&action=accept").json()["rows"]) == len(flags)
 
 
-def test_local_env_files_are_never_copied_into_docker_images():
-    """api/.env holds the real key on a developer machine. If .dockerignore doesn't exclude it, `COPY . .` puts it in every image layer."""
-    ignore = (Path(__file__).resolve().parents[1] / ".dockerignore").read_text().splitlines()
-    assert ".env" in ignore and any(l.strip() in (".env.*", "*.env") for l in ignore)
-    gi = Path(__file__).resolve().parents[2] / ".gitignore"          # the repo root is not mounted inside the container
-    if gi.exists():
-        assert ".env" in gi.read_text().splitlines()
 
 
 def test_deleting_by_prefix_works_with_the_postgres_storage_backend(monkeypatch):

@@ -8,9 +8,9 @@ run without the rest of the repo as long as a backend answers at `API_URL`.
 
 | | Command |
 |---|---|
-| Dev, no Docker | `npm install && API_URL=http://127.0.0.1:8000 npm run dev` (or `make dev`) |
-| Docker | start the backend first (`cd ../api && make up`), then `make up` here. Opens on http://localhost:3000 |
-| Backend somewhere else | `API_URL=http://host:8000 docker compose up -d --build` (the URL is baked in at build time) |
+| Dev | `make dev` (or `npm install && API_URL=http://127.0.0.1:8000 npm run dev`). Opens on http://localhost:3000 |
+| Production build | `API_URL=http://host:8000 make build && make start` (the URL is fixed at build time) |
+| Backend somewhere else | `API_URL=http://host:8000 make dev` |
 
 Demo logins (backend seeds them): `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.com` / `analyst-password-123`.
 

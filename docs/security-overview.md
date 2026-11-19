@@ -1,6 +1,6 @@
 # Security overview (prototype)
 
-> **Important:** since the team commits of 2026-11-19, `AUTH_DISABLED` defaults to **true** (`api/app/config.py`, `docker-compose.yml`): there is no login and every request acts as an admin. Everything below about accounts, roles and rate limiting describes the code when `AUTH_DISABLED=false`, which is what the tests enforce. See `docs/scope-compliance.md` section 6.
+> **Important:** since the team commits of 2026-11-19, `AUTH_DISABLED` defaults to **true** (`api/app/config.py`): there is no login and every request acts as an admin. Everything below about accounts, roles and rate limiting describes the code when `AUTH_DISABLED=false`, which is what the tests enforce. See `docs/scope-compliance.md` section 6.
 
 What is done, what is configured but untested, and what is not done. A proof of concept is not a production system.
 
@@ -21,7 +21,7 @@ What is done, what is configured but untested, and what is not done. A proof of 
 
 ## Configured but not verified here
 - **Zero data retention / no training** with the AI provider is an agreement, not a switch. `AI_ZDR_CONFIRMED=true` records that it was arranged; until then the AI provider classes refuse to run. Nothing here proves the provider honours it.
-- **Encryption at rest:** the S3 bucket must have default encryption (SSE) and `S3_SSE` set; MinIO locally is not encrypted. **TLS:** `docker-compose.prod.yml` puts a TLS-terminating proxy in front; it is validated with `docker compose config` only and has never been deployed.
+- **Encryption at rest:** the S3 bucket must have default encryption (SSE) and `S3_SSE` set; MinIO locally is not encrypted. **TLS:** production must put a TLS-terminating reverse proxy in front of the web app and API; there is no deployment config in the repo and it has never been deployed.
 
 ## Not done
 - No SSO, MFA, password reset flow or account lockout beyond the rate limit; the rate limiter is in memory (one API process).

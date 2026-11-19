@@ -1,26 +1,32 @@
-# Backend only. Run from api/.
-.PHONY: network up down logs test config-check eval-flags
+# Backend only, on the host (no Docker). Run from api/. Settings come from api/.env (copy .env.example).
+.PHONY: install dev worker maintenance test config-check eval-flags
 
-network:
-	@docker network inspect invoice-audit >/dev/null 2>&1 || docker network create invoice-audit
+PY := .venv/bin/python
 
-up: network
-	docker compose up -d --build
-	@for i in $$(seq 60); do curl -fs localhost:8000/health >/dev/null && break; sleep 2; done
+.venv:
+	python3 -m venv .venv && .venv/bin/pip install -q -r requirements.txt
 
-down:
-	docker compose down
+install: .venv
 
-logs:
-	docker compose logs -f api worker
+# migrate, seed and serve on :8000 with auto-reload
+dev: .venv
+	.venv/bin/alembic upgrade head && $(PY) -m app.seed && .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 
-test:
-	docker compose run --rm api python -m pytest -q
+# Only when QUEUE_INLINE=false: needs Redis at REDIS_URL.
+worker: .venv
+	.venv/bin/rq worker --url $${REDIS_URL:-redis://127.0.0.1:6379/0} extraction flags reports maintenance
 
-config-check:
-	docker compose run --rm api python -m app.configcheck
+# Deletes raw files after the retention period; keep it running on any long-lived install.
+maintenance: .venv
+	$(PY) -m app.maintenance --loop
+
+test: .venv
+	SYNTHETIC_DIR=$${SYNTHETIC_DIR:-../synthetic/out} $(PY) -m pytest -q
+
+config-check: .venv
+	$(PY) -m app.configcheck
 
 # Rule evaluation on synthetic_dataset_v1. Needs DATABASE_URL pointing at a *_test database (see eval/run_flag_eval_v1.py).
 # Usage: make eval-flags DATASET=/path/to/synthetic_dataset_v1
-eval-flags:
-	python -m eval.run_flag_eval_v1 --dataset $(DATASET) --config aligned
+eval-flags: .venv
+	$(PY) -m eval.run_flag_eval_v1 --dataset $(DATASET) --config aligned

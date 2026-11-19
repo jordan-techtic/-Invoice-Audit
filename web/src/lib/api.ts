@@ -139,6 +139,8 @@ export const api = {
   flag: (cid: string, fid: string) => request<FlagDetail>(`/clients/${cid}/flags/${fid}`),
   flagAction: (cid: string, fid: string, action: "accept" | "dismiss" | "edit" | "reopen", body: object = {}) =>
     request<FlagDetail>(`/clients/${cid}/flags/${fid}/${action}`, json("POST", body)),
+  bulkFlags: (cid: string, ids: string[], action: "accept" | "dismiss" | "reopen", extra: { reason?: DismissReason; note?: string } = {}) =>
+    request<{ changed: number; unchanged: number; skipped: number }>(`/clients/${cid}/flags/bulk`, json("POST", { ids, action, ...extra })),
   recheck: (cid: string, iid: string) => request<{ flags: number; added: number; removed: number }>(`/clients/${cid}/invoices/${iid}/recheck`, { method: "POST" }),
   client: (cid: string) => request<Client>(`/clients/${cid}`),
   reportSettings: (cid: string) => request<{ default_offer_text: string; company_name: string }>(`/clients/${cid}/report-settings`),

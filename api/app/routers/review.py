@@ -93,6 +93,42 @@ class EditIn(NoteIn):
     reason: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
+class BulkIn(NoteIn):
+    ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
+    action: str
+    reason: str | None = None
+
+
+@router.post("/flags/bulk")
+def bulk(client_id: uuid.UUID, body: BulkIn, request: Request, db: Session = Depends(client_db)):
+    """Accept, dismiss or reopen many flags at once. Same rules as the one-flag actions; the session is client-scoped,
+    so ids from another client are simply not found and are counted as skipped."""
+    if body.action not in {"accept", "dismiss", "reopen"}:
+        raise HTTPException(422, "Pick an action: accept, dismiss or reopen.")
+    if body.action == "dismiss" and body.reason not in DISMISS_REASONS:
+        raise HTTPException(422, "Pick a reason: wrong extraction, shop had a valid reason, not a real issue, or other.")
+    flags = list(db.scalars(select(Flag).where(Flag.id.in_(set(body.ids)))).all())
+    changed = 0
+    for f in flags:
+        if body.action == "reopen":
+            if f.status == FlagStatus.open:
+                continue
+            f.status, f.dismiss_reason, f.reviewed_by, f.reviewed_at = FlagStatus.open, None, None, None
+        else:
+            target = FlagStatus.accepted if body.action == "accept" else FlagStatus.dismissed
+            if f.status == target and (body.action == "accept" or f.dismiss_reason == body.reason):
+                continue
+            f.status, f.dismiss_reason = target, (body.reason if body.action == "dismiss" else None)
+            if body.note is not None:
+                f.analyst_note = body.note
+            _stamp(db, f)
+        changed += 1
+    db.commit()
+    audit.record(db, action=body.action if body.action != "reopen" else "edit", object_type="flag",
+                 detail={"op": f"bulk_{body.action}", "count": changed, "requested": len(body.ids), "reason": body.reason}, request=request)
+    return {"changed": changed, "unchanged": len(flags) - changed, "skipped": len(set(body.ids)) - len(flags)}
+
+
 @router.post("/flags/{flag_id}/accept")
 def accept(flag_id: uuid.UUID, client_id: uuid.UUID, body: NoteIn, request: Request, db: Session = Depends(client_db)):
     f = _get(db, flag_id)

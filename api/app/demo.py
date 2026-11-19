@@ -46,8 +46,8 @@ DEMO_NAME = "Demo Fleet (synthetic)"
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--synthetic", default="/synthetic/out")
-    ap.add_argument("--out", default="/demo")
+    ap.add_argument("--synthetic", default=os.environ.get("SYNTHETIC_DIR", "../synthetic/out"))
+    ap.add_argument("--out", default="../demo")
     ap.add_argument("--limit", type=int, default=0)
     a = ap.parse_args()
     t_start = time.monotonic()

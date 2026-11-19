@@ -5,7 +5,7 @@ Extracted data, flags and reports are kept unless the admin chooses 'delete ever
 live under reports/<id>/ so deleting raw files never removes them.
 
   python -m app.maintenance          run the retention check once
-  python -m app.maintenance --loop   run it every hour (the 'maintenance' compose service)
+  python -m app.maintenance --loop   run it every hour (`make maintenance` in api/)
 """
 
 from __future__ import annotations

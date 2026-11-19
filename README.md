@@ -4,44 +4,37 @@ Reads a fleet's outside repair invoices (PDF, scans, phone photos) with AI, flag
 lets an analyst confirm each finding, and produces a client report (web link + PDF). One deployment, many clients, data
 kept separate per client. Internal tool for Techtic Solutions; clients do not log in.
 
-## Quick start
-```bash
-cp .env.example .env            # add OPENAI_API_KEY and, once confirmed with the provider, AI_ZDR_CONFIRMED=true
-docker compose up -d --build    # db, redis, api, worker, maintenance, web
-open http://localhost:3000      # sign in: admin@audit-demo.com / admin-password-123  (demo accounts, change them)
-```
-With no key set, start the stack offline instead: `AI_PROVIDER=fake docker compose up -d --build` (the API refuses to start
-with `AI_PROVIDER=openai` and no key, by design).
+## Run locally (no Docker)
+Needs PostgreSQL, Python 3.11+ and Node.js on the machine.
 
-**One command demo:** `make demo` (or `make demo-clean` to wipe the local volumes first). It generates the 200 synthetic
-invoices if needed, loads and reads them, runs the checks, accepts the flags that match the answer key, dismisses the rest,
-creates the report and PDF (`demo/sample_report.pdf`) and prints the numbers. With an OpenAI key it uses the real AI.
+1. **Database:** create role `audit` / password `audit` and the databases `audit` and `audit_test`
+   (`sudo -u postgres psql -f infra/postgres-init.sql`). Using another port or password? Change `DATABASE_URL` in `api/.env`.
+2. **Settings:** `cp api/.env.example api/.env`, then add `OPENAI_API_KEY` and, once confirmed with the provider,
+   `AI_ZDR_CONFIRMED=true`. With no key, set `AI_PROVIDER=fake` (the API refuses to start with `AI_PROVIDER=openai` and no
+   key, by design).
+3. **API:** `make api` (migrates, seeds the demo accounts and serves http://127.0.0.1:8000, docs at `/docs`).
+4. **Web:** in a second terminal, `make web`, then open http://localhost:3000.
+
+Demo logins: `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.com` / `analyst-password-123`. With
+`AUTH_DISABLED=true` in `api/.env` there is no sign-in screen (every request acts as the admin).
+
+**Background jobs.** With `QUEUE_INLINE=true` (the default in `api/.env.example`) uploads and checks run inside the
+request, so neither Redis nor a worker is needed. For larger batches set `QUEUE_INLINE=false`, run Redis, and start
+`cd api && make worker`. On any long-lived install also keep `cd api && make maintenance` running: it deletes raw files
+after the retention period.
+
+**File storage.** `STORAGE_BACKEND=postgres` (default) keeps uploaded files in the database. Production uses
+`STORAGE_BACKEND=s3` with real AWS S3.
+
+**One command demo:** `make demo`. It generates the 200 synthetic invoices if needed, loads and reads them, runs the
+checks, accepts the flags that match the answer key, dismisses the rest, creates the report and PDF
+(`demo/sample_report.pdf`) and prints the numbers. With an OpenAI key it uses the real AI.
 **Without a key it uses an offline oracle that replays the answer key with injected errors; everything after reading is real,
 but the reading accuracy it reports is not a model result.**
 
 ## Backend and frontend run independently
-`api/` (FastAPI, worker, db, redis) and `web/` (Next.js) each have their own `docker-compose.yml`, `Makefile`,
-`.env.example` and README. The only link is HTTP: the frontend proxies `/api/*` to `API_URL`.
-```bash
-cd api && make up      # backend alone on :8000 (creates the shared `invoice-audit` Docker network)
-cd web && make up      # frontend alone on :3000, talks to api:8000 on that network
-cd web && make dev     # or: no Docker, Next dev server against any backend (API_URL=...)
-```
-The root `docker-compose.yml` still starts everything together (`docker compose up -d --build`). Use either the root
-stack or the separate ones, not both at once: they publish the same ports.
-
-## Local without Docker
-
-PostgreSQL, Node.js, and Python 3.11+ on the host. With `QUEUE_INLINE=true` you do not need Redis or an RQ worker. Set
-`STORAGE_BACKEND=postgres` in `api/.env` to keep uploaded files in the database (the default).
-
-1. **Database** — create role `audit` / password `audit` and databases `audit` and `audit_test` (see `infra/postgres-init.sql`).
-   If port 5433 is in use, point `DATABASE_URL` at 5432 in `api/.env`.
-2. **API** — `cp api/.env.example api/.env`, then `./scripts/dev-local.sh` (or follow the manual steps inside the script).
-3. **Web** — `cd web && npm install && API_URL=http://127.0.0.1:8000 npm run dev`. With `AUTH_DISABLED=true` in `api/.env`, no sign-in screen (acts as admin).
-4. **File storage** — `STORAGE_BACKEND=postgres` (default): files are kept in the database. Production uses `STORAGE_BACKEND=s3` with real AWS S3.
-
-Demo logins: `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.com` / `analyst-password-123`.
+`api/` (FastAPI) and `web/` (Next.js) each have their own `Makefile`, `.env.example` and README. The only link is HTTP:
+the frontend proxies `/api/*` to `API_URL` (default http://127.0.0.1:8000), so either can run on its own machine.
 
 ## How to run an audit
 1. **Create the client.** Admin: *Clients -> Add client*. Open *Settings* to check the warranty rules (defaults for ~16
@@ -75,12 +68,12 @@ Demo logins: `admin@audit-demo.com` / `admin-password-123`, `analyst@audit-demo.
 `EXTRACTION_RETRIES` (1), `PRICE_INPUT_PER_MTOK` / `PRICE_OUTPUT_PER_MTOK` (cost estimates; check current pricing),
 `RAW_FILE_RETENTION_DAYS` (90). Per-client thresholds (labour %, repeat days/miles, parts %, severity bands, retention) are
 editable via `PATCH /clients/{id}` settings. Report branding and the default offer text: `api/app/report_settings.json`.
-Prompts: `api/app/prompts/*.txt`. Run `make config-check` to list what is not set for production;
-`docker-compose.prod.yml` adds TLS. For non-Docker API runs, copy `api/.env.example` to `api/.env`.
+Prompts: `api/app/prompts/*.txt`. Run `make config-check` to list what is not set for production.
+Production needs TLS in front of both services (any reverse proxy, e.g. Caddy or nginx); there is no deployment config in the repo.
 
 ## Tests
-`make test` runs the backend suite. For the synthetic-data cases mount the set:
-`docker compose run --rm -v $PWD/synthetic:/synthetic:ro api python -m pytest -q`.
+`make test` runs the backend suite against the `audit_test` database. The synthetic-data cases use `synthetic/out`
+(generate it with `make demo`, or point `SYNTHETIC_DIR` elsewhere) and are skipped if it is missing.
 Browser tests: `cd web && npx playwright test` (stack running with `AI_PROVIDER=fake FAKE_PROVIDER_DEMO=true`).
 Measurements: `python -m eval.run_eval` (extraction), `python -m eval.run_flag_eval` (rules), `python -m app.demo` (all).
 Results and known limitations: `TEST_RESULTS.md`. More: `docs/` (architecture, data policy, security overview, NDA template,

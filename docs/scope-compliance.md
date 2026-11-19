@@ -12,7 +12,7 @@ real analysts, a 1,000-invoice run, or human readers (section 3). **Login is cur
 arrange: sample invoices, OpenAI zero-retention confirmation, AWS hosting, an email provider, and the fleet advisor.
 
 Found and fixed during this review: `docker-compose.prod.yml` did not parse (the API still depended on the local MinIO it
-had turned off). It is fixed and validated with `docker compose config`; it has not been deployed.
+had turned off). It is fixed and validated with `docker compose config`; it has not been deployed. (Docker was later removed from the repo on 2026-11-19; there is no deployment config now.)
 
 ## 1. Scope (section 2) and modules (section 3)
 
@@ -43,9 +43,9 @@ had turned off). It is fixed and validated with `docker compose config`; it has 
 | Requirement | Status | Evidence / gap |
 |---|---|---|
 | Next.js, FastAPI, PostgreSQL, S3, HTML-to-PDF | **Done** | Next 16, FastAPI, Postgres 16, MinIO locally / S3 in config, WeasyPrint. |
-| Hosting on AWS, US region | **Not done** | Never deployed. `docker-compose.prod.yml` (Caddy TLS, S3 settings) is syntactically valid only. |
+| Hosting on AWS, US region | **Not done** | Never deployed. There is no deployment config in the repo (Docker was removed on 2026-11-19); S3 settings are in `api/.env.example`. |
 | Encrypted at rest | **Partial** | Raw model responses are encrypted by the app (tested). Object storage needs S3 SSE (config exists, not exercised; local MinIO is unencrypted). **Database at-rest encryption is not configured**; it would come from encrypted RDS/volumes. |
-| Encrypted in transit | **Partial** | TLS is in the production compose only; local runs are plain HTTP. |
+| Encrypted in transit | **Partial** | No TLS config in the repo; production needs a TLS reverse proxy in front. Local runs are plain HTTP. |
 | Per-client isolation | **Done** | Strongest part: shared data layer, all 35 client routes attacked from the wrong client, cross-client write refusal. |
 | Role-based access, staff only | **Partial** | Admin/analyst roles enforced on 13 admin actions. **No UI to create or manage staff accounts** (API only); no MFA, SSO or password reset. Login rate limit is in memory (one process). |
 | NDA template and deletion policy | **Done** | `docs/nda-template.md` (needs legal review), `docs/data-handling-policy.md`; automatic raw-file deletion 90 days after audit complete, tested. |
@@ -78,9 +78,9 @@ reports and tests describe. I did not revert any of them.
 
 | Change | Effect | Decision needed |
 |---|---|---|
-| `auth_disabled` defaults to **true** in `config.py` and `docker-compose.yml` (`${AUTH_DISABLED:-true}`); every request acts as the seeded admin, role checks and client-access checks are skipped | Scope section 5 ("role-based access for internal staff only") is **not met by default**. Anyone who can reach the API can read, change and delete every client's data. The tests only pass because `conftest.py` forces `AUTH_DISABLED=false`. Nothing in the production config forces it back on. | Decide whether this is a deliberate demo shortcut. For any real deployment set `AUTH_DISABLED=false` and add a production guard that refuses to start with it on. |
+| `auth_disabled` defaults to **true** in `config.py`; every request acts as the seeded admin, role checks and client-access checks are skipped | Scope section 5 ("role-based access for internal staff only") is **not met by default**. Anyone who can reach the API can read, change and delete every client's data. The tests only pass because `conftest.py` forces `AUTH_DISABLED=false`. Nothing in the production config forces it back on. | Decide whether this is a deliberate demo shortcut. For any real deployment set `AUTH_DISABLED=false` and add a production guard that refuses to start with it on. |
 | New `STORAGE_BACKEND=postgres` option (invoice files stored in a `stored_objects` table) | Convenient locally. Files are stored unencrypted in database rows, so encryption relies on database at-rest encryption, not S3. **It had a bug**: `delete_prefix` called the wrong `delete`, so the 90-day deletion job, "Delete raw files now" and "Delete everything" all crashed on this backend. | I fixed the bug (one-line import alias) and added a regression test. Decide whether Postgres storage is for local use only. |
-| New `api/.env` (for running the API on the host) contains the real OpenAI key, and `api/.dockerignore` did not exclude it | The key was **copied into the API, worker and maintenance Docker images** (found by the repo key-scan test). | I added `.env` to `.dockerignore`, rebuilt the three images and confirmed the key is gone. **Old images may still hold it:** run `docker image prune` for dangling layers, and rotate the key if any image was pushed or shared. `.env` files are git-ignored and not in git history. |
+| New `api/.env` (for running the API on the host) contains the real OpenAI key, and `api/.dockerignore` did not exclude it | The key was **copied into the API, worker and maintenance Docker images** (found by the repo key-scan test). | I added `.env` to `.dockerignore`, rebuilt the three images and confirmed the key is gone. **Old images may still hold it:** run `docker image prune` for dangling layers, and rotate the key if any image was pushed or shared. Docker has since been removed from the repo. `.env` files are git-ignored and not in git history. |
 | `.env.example` removed/changed in commits | New contributors have no template | Restore a template with no values. |
 
 
@@ -104,13 +104,13 @@ Each scope module was checked against real output, not just the tests. Results, 
 0. Resolve section 6: turn authentication back on (and refuse to start in production without it), decide on the Postgres storage backend, and rotate the OpenAI key if any image left this machine.
 1. Get 50 to 100 anonymised real invoices from a friendly fleet or shop, and re-run the accuracy evaluation on them.
 2. Confirm zero data retention with OpenAI, then set `AI_ZDR_CONFIRMED=true` and **restore `AI_ZERO_RETENTION_REQUIRED=true`** in `.env`. Have counsel review the NDA.
-3. Deploy to AWS US region: encrypted S3 bucket, encrypted database, TLS, secrets in a secrets manager; make `make config-check --strict` pass; test `docker-compose.prod.yml` for real.
+3. Deploy to AWS US region: encrypted S3 bucket, encrypted database, TLS, secrets in a secrets manager; make `make config-check --strict` pass; write and test the deployment (TLS proxy, process manager for API, worker and maintenance).
 4. Connect a real inbound email provider (Postmark or SES): per-client address, signature verification, and show the address on the client page.
 5. Fleet maintenance advisor reviews the rule thresholds, warranty defaults, the "routine work" exclusion list and the benchmark approach; get quotes for licensed labour data.
 
 **B. To prove the success criteria**
 6. Measure flag precision after review with two or more real analysts on real invoices, and record review time per invoice.
-7. Run a 1,000-invoice test (synthetic is fine, about $17) with several workers (`docker compose up --scale worker=4`); record total time, cost, failures and rate-limit behaviour.
+7. Run a 1,000-invoice test (synthetic is fine, about $17) with several workers (`QUEUE_INLINE=false`, Redis, and `make worker` started 4 times); record total time, cost, failures and rate-limit behaviour.
 8. Have 2 or 3 non-expert people read the sample report with a stopwatch; fix what slows them.
 
 **C. Product gaps found in this review**
