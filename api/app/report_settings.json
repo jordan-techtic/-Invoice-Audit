@@ -1,0 +1,13 @@
+{
+  "company_name": "Techtic Solutions",
+  "tagline": "Repair invoice audit",
+  "accent": "#1F3A56",
+  "ink": "#1B2B3A",
+  "money": "#8F5A00",
+  "highlight": "#F2A900",
+  "footer": "Prepared by Techtic Solutions",
+  "logo_text": "Techtic",
+  "default_offer_text": "If you would like us to keep watching your repair spend, Techtic can run this audit every month and flag likely overbilling and missed warranty claims while there is still time to recover them.\n\nNext steps:\n1. Review the findings in this report with your maintenance team.\n2. Ask the shops listed to look at the invoices flagged as likely overbilling or duplicates.\n3. File warranty claims for the repairs listed as possibly under warranty.\n4. Talk to us about a monthly audit so these items are caught as they happen.",
+  "note": "Estimates are based on the invoices provided and industry benchmarks, and each finding was reviewed by an analyst.",
+  "link_expiry_days_default": 30
+}

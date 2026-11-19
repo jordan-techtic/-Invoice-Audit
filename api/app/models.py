@@ -82,14 +82,23 @@ class Severity(str, enum.Enum):
 
 
 DEFAULT_CLIENT_SETTINGS: dict = {
+    # extraction
+    "confidence_threshold": 0.80,
+    "math_tolerance": 1.00,
+    # flag rules
     "labour_over_benchmark_pct": 20,
     "labour_min_samples": 5,
     "repeat_repair_days": 90,
-    "repeat_repair_miles": 15000,
-    "parts_outlier_pct": 30,
+    "repeat_repair_miles": 10000,
+    "repeat_exclude_codes": [  # routine, recurring work: not a "repeat repair"
+        "045-001-001", "045-001-008", "044-001-002", "041-001-001", "043-001-001",
+        "001-001-005", "017-001-004", "017-001-005", "071-001-003", "042-001-006",
+    ],
+    "parts_outlier_pct": 25,
+    "parts_single_shop_multiple": 1.5,
     "parts_min_samples": 3,
-    "math_tolerance": 1.00,
-    "confidence_threshold": 0.80,
+    "severity_high_dollars": 500,
+    "severity_medium_dollars": 150,
 }
 
 
@@ -251,6 +260,8 @@ class InvoiceLine(IdMixin, ClientScoped, Base):
     vmrs_code: Mapped[str | None] = mapped_column(String(11), index=True)
     vmrs_confidence: Mapped[float | None] = mapped_column(Float)
     vmrs_source: Mapped[str | None] = mapped_column(String(20))  # lookup | ai | analyst
+    page_no: Mapped[int | None] = mapped_column(Integer)  # page of the upload this line is on
+    y_center: Mapped[float | None] = mapped_column(Float)  # model's estimate of the line's vertical position, 0 (top) to 1 (bottom)
 
     invoice: Mapped[Invoice] = relationship(back_populates="lines")
 
@@ -305,6 +316,7 @@ class PartsPriceBaseline(IdMixin, ClientScoped, Base):
     part_number: Mapped[str] = mapped_column(String(80), nullable=False)
     median_price: Mapped[Decimal] = mapped_column(Money, nullable=False)
     sample_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    shop_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
@@ -328,6 +340,11 @@ class Flag(IdMixin, ClientScoped, Base):
     plain_english_reason: Mapped[str] = mapped_column(Text, nullable=False)
     details: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     ai_score: Mapped[float | None] = mapped_column(Float)
+    dismiss_reason: Mapped[str | None] = mapped_column(String(30))  # wrong_extraction|valid_reason|not_real_issue|other
+    original_impact: Mapped[Decimal | None] = mapped_column(Money)  # set the first time an analyst edits the amount
+    original_reason: Mapped[str | None] = mapped_column(Text)
+    dedupe_key: Mapped[str] = mapped_column(String(200), nullable=False, index=True)  # same finding => same key across runs
+    evidence_hash: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[FlagStatus] = mapped_column(
         _enum(FlagStatus, "flag_status"), nullable=False, default=FlagStatus.open, index=True
     )
@@ -339,6 +356,28 @@ class Flag(IdMixin, ClientScoped, Base):
     line: Mapped[InvoiceLine | None] = relationship()
 
 
+class FlagRun(IdMixin, ClientScoped, Base):
+    """One run of reference data + rules + AI explanations. Its id is the 'job id' the API returns."""
+
+    __tablename__ = "flag_runs"
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="queued")  # queued|running|done|failed
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cost_usd: Mapped[Decimal] = mapped_column(Numeric(10, 5), nullable=False, default=0)
+
+
+class FlagExplanationCache(IdMixin, ClientScoped, Base):
+    __tablename__ = "flag_explanation_cache"
+    __table_args__ = (UniqueConstraint("client_id", "evidence_hash", name="uq_flag_expl"),)
+    evidence_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    ai_score: Mapped[float | None] = mapped_column(Float)
+
+
 class Report(IdMixin, ClientScoped, Base):
     __tablename__ = "reports"
     generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -346,8 +385,13 @@ class Report(IdMixin, ClientScoped, Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     file_path: Mapped[str | None] = mapped_column(String(500))
     summary: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)  # frozen content: later edits never change a report
+    recoverable: Mapped[Decimal] = mapped_column(Money, nullable=False, default=0)
+    flag_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     share_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    share_token_enc: Mapped[bytes | None] = mapped_column(LargeBinary)  # so an admin can copy the link again; the DB never holds it in clear
     share_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class AuditLog(IdMixin, Base):

@@ -38,6 +38,7 @@ class Line(BaseModel):
     labour_hours: Scored = Scored()
     labour_rate: Scored = Scored()
     line_total: Scored = Scored()
+    y_center: float | None = None  # approximate vertical centre of this line on the page, 0 = top, 1 = bottom
 
 
 class PageExtraction(BaseModel):

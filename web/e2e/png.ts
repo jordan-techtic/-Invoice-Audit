@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { deflateSync } from "node:zlib";
 
 function crc32(buf: Buffer): number {
@@ -21,6 +22,8 @@ function chunk(type: string, data: Buffer): Buffer {
 
 /** A small valid RGB PNG that looks like a page of text lines; `seed` makes every file's bytes differ. */
 export function makePng(seed: number, w = 360, h = 480): Buffer {
+  // Random block so every generated file has unique bytes (and a unique SHA-256) across runs.
+  const noise = randomBytes(2048);
   const rows: Buffer[] = [];
   for (let y = 0; y < h; y++) {
     const row = Buffer.alloc(1 + w * 3, 255);
@@ -29,6 +32,7 @@ export function makePng(seed: number, w = 360, h = 480): Buffer {
     for (let x = 0; x < w; x++) {
       let v = 255;
       if (line && x > 30 && x < w - 30 - ((y * 7 + seed * 13) % 120)) v = 120 + ((x * seed) % 40);
+      if (y >= 30 && y < 38 && x > 30 && x < 130) v = noise[(y * w + x) % noise.length];
       if (y < 30) v = 31 + (seed % 20);
       row[1 + x * 3] = v; row[2 + x * 3] = v; row[3 + x * 3] = y < 30 ? 86 : v;
     }

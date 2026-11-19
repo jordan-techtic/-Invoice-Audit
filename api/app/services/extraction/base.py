@@ -59,6 +59,41 @@ class ClassifyResult(BaseModel):
     items: list[LineClass]
 
 
+class ExplainItem(BaseModel):
+    index: int
+    reason: str
+    ai_score: float = 0.0
+
+
+class ExplainResult(BaseModel):
+    items: list[ExplainItem]
+
+
+@dataclass
+class ExplainOutcome:
+    items: list[ExplainItem]
+    raw_responses: list[str]
+    usage: Usage
+    attempts: int
+
+
+class NarrativeItem(BaseModel):
+    type: str
+    paragraph: str
+
+
+class NarrativeResult(BaseModel):
+    items: list[NarrativeItem]
+
+
+@dataclass
+class NarrativeOutcome:
+    items: list[NarrativeItem]
+    raw_responses: list[str]
+    usage: Usage
+    attempts: int
+
+
 @dataclass
 class ClassifyOutcome:
     items: list[LineClass]
@@ -81,12 +116,61 @@ class ExtractionProvider(ABC):
     name: str = "base"
     model: str = "n/a"
     retries: int = 1
+    redact: bool = False  # mask VIN/phone in text payloads (set from AI_REDACT_BEFORE_SEND)
+
+    def _r(self, text: str) -> str:
+        if not self.redact:
+            return text
+        from ..redact import redact_text
+
+        return redact_text(text)
 
     @abstractmethod
     def _raw_extract(self, image: bytes, media_type: str, correction: str | None) -> RawResponse: ...
 
     @abstractmethod
     def _raw_classify(self, descriptions: list[str], codes_text: str, correction: str | None) -> RawResponse: ...
+
+    @abstractmethod
+    def _raw_explain(self, evidence_json: str, correction: str | None) -> RawResponse: ...
+
+    def explain(self, evidence_items: list[dict]) -> ExplainOutcome:
+        correction: str | None = None
+        usage, raws = Usage(), []
+        last = "unknown"
+        payload = self._r(json.dumps(evidence_items))
+        for attempt in range(1, self.retries + 2):
+            resp = self._raw_explain(payload, correction)
+            usage.add(resp.usage)
+            raws.append(resp.text)
+            try:
+                res = ExplainResult.model_validate(json.loads(resp.text))
+                return ExplainOutcome(res.items, raws, usage, attempt)
+            except (json.JSONDecodeError, ValidationError) as e:
+                last = safe_error_summary(e)
+                correction = f"Your previous answer was rejected: {last}. Return only the structured result."
+        raise ExtractionError(f"Flag explanation failed after {self.retries + 1} tries ({last}).")
+
+    @abstractmethod
+    def _raw_narrative(self, payload_json: str, correction: str | None) -> RawResponse: ...
+
+    def narrate(self, payload: list[dict]) -> NarrativeOutcome:
+        """One short paragraph per flag type for the client report, from analyst-accepted findings."""
+        correction: str | None = None
+        usage, raws = Usage(), []
+        last = "unknown"
+        text = self._r(json.dumps(payload))
+        for attempt in range(1, self.retries + 2):
+            resp = self._raw_narrative(text, correction)
+            usage.add(resp.usage)
+            raws.append(resp.text)
+            try:
+                res = NarrativeResult.model_validate(json.loads(resp.text))
+                return NarrativeOutcome(res.items, raws, usage, attempt)
+            except (json.JSONDecodeError, ValidationError) as e:
+                last = safe_error_summary(e)
+                correction = f"Your previous answer was rejected: {last}. Return only the structured result."
+        raise ExtractionError(f"Report narrative failed after {self.retries + 1} tries ({last}).")
 
     def extract_page(self, image: bytes, media_type: str = "image/jpeg") -> PageResult:
         correction: str | None = None
@@ -115,7 +199,7 @@ class ExtractionProvider(ABC):
         usage, raws = Usage(), []
         last = "unknown"
         for attempt in range(1, self.retries + 2):
-            resp = self._raw_classify(descriptions, codes_text, correction)
+            resp = self._raw_classify([self._r(d) for d in descriptions], codes_text, correction)
             usage.add(resp.usage)
             raws.append(resp.text)
             try:

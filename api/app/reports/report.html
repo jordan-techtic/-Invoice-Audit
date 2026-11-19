@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>{{ s.cover.client_name }} – repair invoice audit</title>
+<style>
+@font-face { font-family: "Figtree"; src: url("fonts/Figtree.ttf"); font-weight: 100 900; }
+@page { size: Letter; margin: 22mm 18mm 20mm 18mm;
+  @bottom-left { content: "{{ s.branding.footer }}"; font: 9pt Figtree, sans-serif; color: #4F5F70; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt Figtree, sans-serif; color: #4F5F70; } }
+@page :first { margin: 0; @bottom-left { content: none } @bottom-right { content: none } }
+* { box-sizing: border-box; }
+body { font: 10.5pt/1.5 Figtree, "DejaVu Sans", sans-serif; color: {{ s.branding.ink }}; margin: 0; }
+h1, h2, h3 { margin: 0; font-weight: 700; }
+h2 { font-size: 17pt; margin: 0 0 4mm; }
+h3 { font-size: 12pt; margin: 6mm 0 2mm; }
+p { margin: 0 0 3mm; max-width: 150mm; }
+.muted { color: #4F5F70; }
+.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.cover { height: 279mm; padding: 28mm 24mm; page-break-after: always; background: #F3F5F8; position: relative; }
+.cover .brand { font-size: 13pt; font-weight: 700; color: {{ s.branding.accent }}; }
+.cover h1 { font-size: 30pt; margin-top: 34mm; color: {{ s.branding.accent }}; }
+.cover .client { font-size: 17pt; margin-top: 3mm; }
+.cover .meta { margin-top: 5mm; color: #4F5F70; }
+.hero { margin-top: 26mm; }
+.hero .fig { font-size: 64pt; line-height: 1; font-weight: 700; color: {{ s.branding.money }}; font-variant-numeric: tabular-nums; }
+.hero .rule { width: 62mm; height: 1.6mm; background: {{ s.branding.highlight }}; margin: 3mm 0 4mm; }
+.hero .sub { font-size: 13pt; max-width: 120mm; }
+section { margin-bottom: 9mm; }
+.finding { display: table; width: 100%; padding: 2.2mm 0; border-bottom: 0.3mm solid #D5DCE4; page-break-inside: avoid; }
+.finding > div { display: table-cell; vertical-align: top; }
+.finding .amt { width: 28mm; text-align: right; font-weight: 700; color: {{ s.branding.money }}; font-variant-numeric: tabular-nums; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; color: #4F5F70; font-size: 9pt; padding: 1.6mm 2mm; border-bottom: 0.4mm solid #7A8899; }
+td { padding: 1.8mm 2mm; border-bottom: 0.3mm solid #D5DCE4; vertical-align: top; font-size: 9.5pt; }
+tr { page-break-inside: avoid; }
+th.num, td.num { text-align: right; }
+.bar-row td { border: 0; padding: 1.2mm 2mm; }
+.bar { height: 4.5mm; background: {{ s.branding.accent }}; }
+.bar.hi { background: {{ s.branding.highlight }}; }
+.bar-label { width: 46mm; font-size: 9.5pt; } .bar-amt { width: 26mm; font-size: 9.5pt; }
+.note { margin-top: 8mm; padding-top: 3mm; border-top: 0.3mm solid #D5DCE4; font-size: 9.5pt; color: #4F5F70; }
+.pre { white-space: pre-line; }
+.break { page-break-before: always; }
+.block { page-break-inside: avoid; break-inside: avoid; }
+</style></head><body>
+<div class="cover">
+  <div class="brand">{{ s.branding.logo_text }} · {{ s.branding.tagline }}</div>
+  <h1>Repair invoice audit</h1>
+  <div class="client">{{ s.cover.client_name }}</div>
+  <div class="meta">Audit date {{ audit_date }} · {{ s.cover.invoices_reviewed }} invoices reviewed{% if s.cover.period %} · {{ s.cover.period }}{% endif %}</div>
+  <div class="hero">
+  {% if not s.empty %}
+    <div class="fig">{{ money(s.summary.recoverable) }}</div><div class="rule"></div>
+    <div class="sub">likely recoverable, {{ s.summary.pct_of_spend }}% of {{ money(s.summary.total_spend) }} of repair spend reviewed</div>
+  {% else %}
+    <div class="sub" style="font-size:17pt">{{ s.summary.headline }}</div>
+  {% endif %}
+  </div>
+</div>
+
+<section>
+  <h2>Summary</h2>
+  <p>{{ s.summary.headline }}.{% if not s.empty %} {{ s.summary.flag_count }} findings were reviewed and confirmed by an analyst.{% endif %}</p>
+  {% if s.summary.top_findings %}
+  <h3>Top findings</h3>
+  {% for f in s.summary.top_findings %}<div class="finding"><div>{{ f.sentence }}</div><div class="amt">{{ money(f.amount) }}</div></div>{% endfor %}
+  {% endif %}
+</section>
+
+{% if not s.empty %}
+<section>
+  <h2>Where the money is</h2>
+  {% for title, rows in [("By finding type", s.breakdown.by_type), ("By shop", s.breakdown.by_shop), ("By vehicle", s.breakdown.by_vehicle)] %}
+  <div class="block"><h3>{{ title }}</h3>
+  {% set mx = rows[0].amount if rows else 1 %}
+  <table>{% for r in rows %}
+    <tr class="bar-row"><td class="bar-label">{{ r.label }}</td><td><div class="bar{% if loop.first %} hi{% endif %}" style="width: {{ (100 * r.amount / mx) | round(1) }}%"></div></td><td class="num bar-amt">{{ money(r.amount) }}</td></tr>
+  {% endfor %}</table>
+  <table style="margin-top:2mm"><tr><th>{{ title[3:]|capitalize }}</th><th class="num">Findings</th><th class="num">Amount</th></tr>
+    {% for r in rows %}<tr><td>{{ r.label }}</td><td class="num">{{ r.count }}</td><td class="num">{{ money(r.amount) }}</td></tr>{% endfor %}</table></div>
+  {% endfor %}
+</section>
+
+<section class="break">
+  <h2>What we found and what to do</h2>
+  {% for n in s.narratives %}<h3>{{ n.label }} · {{ n.count }} · {{ money(n.amount) }}</h3><p>{{ n.paragraph }}</p>{% endfor %}
+</section>
+{% endif %}
+
+<section class="break">
+  <h2>Next steps</h2>
+  <p class="pre">{{ s.next_steps.text }}</p>
+  <div class="note">{{ s.note }}</div>
+</section>
+
+{% if not s.empty %}
+<section class="break">
+  <h2>Appendix: every confirmed finding</h2>
+  <table><tr><th>Invoice</th><th>Date</th><th>Shop</th><th>Unit</th><th>What we found</th><th class="num">Amount</th></tr>
+  {% for a in s.appendix %}<tr><td>{{ a.invoice_number }}</td><td>{{ a.date }}</td><td>{{ a.shop }}</td><td>{{ a.unit }}</td><td>{{ a.reason }}</td><td class="num">{{ money(a.amount) }}</td></tr>{% endfor %}</table>
+</section>
+{% endif %}
+</body></html>

@@ -19,4 +19,24 @@ def default_warranty_rules() -> list[dict]:
         {"vmrs_code": "001-001-001", "component": "A/C compressor", "months": 12, "miles": 100_000},
         {"vmrs_code": "015-001-001", "component": "Power steering pump", "months": 12, "miles": 100_000},
         {"vmrs_code": "043-001-002", "component": "DEF/SCR system", "months": 24, "miles": 250_000},
+        {"vmrs_code": "013-001-007", "component": "Brake chamber", "months": 12, "miles": 100_000},
+        {"vmrs_code": "013-002-002", "component": "Air dryer", "months": 12, "miles": 100_000},
+        {"vmrs_code": "017-001-002", "component": "Drive tire", "months": 12, "miles": None},
+        {"vmrs_code": "017-001-001", "component": "Steer tire", "months": 12, "miles": None},
     ]
+
+
+def ensure_default_warranty_rules(db, client_id) -> int:
+    """Add any missing default rules for a client (existing rows are never changed). db may be any session."""
+    from sqlalchemy import select
+
+    from ..models import WarrantyRule
+
+    have = set(db.scalars(select(WarrantyRule.vmrs_code).where(WarrantyRule.client_id == client_id)))
+    n = 0
+    for r in default_warranty_rules():
+        if r["vmrs_code"] not in have:
+            db.add(WarrantyRule(client_id=client_id, **r))
+            n += 1
+    db.flush()
+    return n

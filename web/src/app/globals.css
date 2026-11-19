@@ -79,3 +79,10 @@
     scroll-behavior: auto !important;
   }
 }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff !important; }
+  .print-avoid, tr, section.report-block { break-inside: avoid; page-break-inside: avoid; }
+  .pl-\[72px\], .lg\:pl-0 { padding-left: 0 !important; }
+}

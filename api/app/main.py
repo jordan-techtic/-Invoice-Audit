@@ -5,7 +5,8 @@ from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .db import CrossClientWriteError, UnscopedQueryError
-from .routers import auth, clients, inbound, invoices, uploads, users
+from . import logfilter
+from .routers import admin, auth, clients, flags, inbound, invoices, reports, review, uploads, users
 
 # Never log request bodies or invoice contents. Only method, path and status.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -18,11 +19,22 @@ from contextlib import asynccontextmanager
 async def lifespan(_: FastAPI):
     from . import storage
 
+    logfilter.install()
+    startup_checks()
     try:
         storage.ensure_bucket()
     except Exception:  # storage may be unavailable in unit tests
         log.warning("object storage not reachable at startup")
     yield
+
+
+def startup_checks() -> None:
+    """Refuse to start without the AI key the configured provider needs (offline providers need none)."""
+    s = get_settings()
+    if s.ai_provider == "openai" and not s.openai_api_key:
+        raise RuntimeError("OPENAI_API_KEY is not set. Add it to .env, or set AI_PROVIDER=fake for an offline demo.")
+    if s.ai_provider == "claude" and not s.anthropic_api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set. Add it to .env, or set AI_PROVIDER=fake for an offline demo.")
 
 
 app = FastAPI(lifespan=lifespan, title="Repair Invoice Audit API", version="0.1.0", docs_url="/docs" if get_settings().env == "local" else None)
@@ -46,3 +58,7 @@ app.include_router(users.router)
 app.include_router(uploads.router)
 app.include_router(invoices.router)
 app.include_router(inbound.router)
+app.include_router(flags.router)
+app.include_router(review.router)
+app.include_router(reports.router)
+app.include_router(admin.router)

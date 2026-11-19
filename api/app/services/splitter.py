@@ -24,6 +24,7 @@ class MergedInvoice:
     page_end: int
     header: dict[str, dict]  # field -> {"value", "confidence"}
     lines: list[dict[str, dict]]
+    line_meta: list[dict] = None  # parallel to lines: {page, y}
 
 
 def _inv_no(p: PageExtraction) -> str | None:
@@ -84,5 +85,6 @@ def merge_group(pages: list[PageExtraction], idxs: list[int]) -> MergedInvoice:
         else:
             s, _ = max(cands, key=lambda c: c[0].confidence)
         header[f] = {"value": s.value, "confidence": s.confidence}
-    lines = [{k: {"value": v["value"], "confidence": v["confidence"]} for k, v in ln.model_dump().items()} for i in idxs for ln in pages[i].lines]
-    return MergedInvoice(page_start=idxs[0] + 1, page_end=idxs[-1] + 1, header=header, lines=lines)
+    lines = [{k: {"value": v["value"], "confidence": v["confidence"]} for k, v in ln.model_dump().items() if k != "y_center"} for i in idxs for ln in pages[i].lines]
+    meta = [{"page": i + 1, "y": ln.y_center} for i in idxs for ln in pages[i].lines]
+    return MergedInvoice(page_start=idxs[0] + 1, page_end=idxs[-1] + 1, header=header, lines=lines, line_meta=meta)

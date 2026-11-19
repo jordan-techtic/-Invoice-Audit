@@ -10,10 +10,19 @@ x-api-env: &api-env
   S3_SECRET_KEY: minioadmin
   S3_REGION: us-east-1
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-  EXTRACTION_PROVIDER: ${EXTRACTION_PROVIDER:-claude}
+  AI_PROVIDER: ${AI_PROVIDER:-openai}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
   FAKE_PROVIDER_DEMO: ${FAKE_PROVIDER_DEMO:-}
   AI_ZDR_CONFIRMED: ${AI_ZDR_CONFIRMED:-false}
   CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.80}
+  AI_ENABLED: ${AI_ENABLED:-true}
+  AI_ZERO_RETENTION_REQUIRED: ${AI_ZERO_RETENTION_REQUIRED:-true}
+  PRICE_INPUT_PER_MTOK: ${PRICE_INPUT_PER_MTOK:-2.5}
+  PRICE_OUTPUT_PER_MTOK: ${PRICE_OUTPUT_PER_MTOK:-10}
+  RAW_FILE_RETENTION_DAYS: ${RAW_FILE_RETENTION_DAYS:-90}
+  INBOUND_EMAIL_SECRET: ${INBOUND_EMAIL_SECRET:-local-inbound-secret}
+  AI_REDACT_BEFORE_SEND: ${AI_REDACT_BEFORE_SEND:-false}
   CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5-5}
   EXTRACTION_RETRIES: ${EXTRACTION_RETRIES:-1}
   JWT_SECRET: ${JWT_SECRET:-local-dev-jwt-secret-change-me-0123456789}
@@ -71,6 +80,13 @@ services:
     depends_on:
       api: { condition: service_healthy }
     command: rq worker --url redis://redis:6379/0 extraction flags reports maintenance
+
+  maintenance:
+    build: ./api
+    environment: *api-env
+    depends_on:
+      api: { condition: service_healthy }
+    command: python -m app.maintenance --loop
 
   web:
     build: ./web

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, type Client } from "@/lib/api";
 import { useSession } from "@/lib/session";
@@ -79,7 +80,8 @@ export default function ClientsPage() {
                     </th>
                     <td className="td num text-right">{n ? n.total : ""}</td>
                     <td className="td num text-right">{n ? n.review : ""}</td>
-                    <td className="td text-right">
+                    <td className="td whitespace-nowrap text-right">
+                      <Link href={`/clients/${c.id}/settings`} className="mr-5 font-medium text-primary underline underline-offset-4" aria-label={`Settings for ${c.name}`}>Settings</Link>
                       <button className={active ? "btn-secondary" : "btn-primary"} onClick={() => pick(c)} aria-label={`Work on ${c.name}`}>
                         {active ? "Continue" : "Choose client"}
                       </button>

@@ -3,7 +3,7 @@ import uuid
 
 os.environ.setdefault("DATABASE_URL", "postgresql+psycopg://audit:audit@db:5432/audit_test")
 os.environ["DATABASE_URL"] = os.environ["DATABASE_URL"].rsplit("/", 1)[0] + "/audit_test"
-os.environ["EXTRACTION_PROVIDER"] = "fake"
+os.environ["AI_PROVIDER"] = "fake"
 os.environ["QUEUE_INLINE"] = "true"
 
 import pytest  # noqa: E402
@@ -62,3 +62,12 @@ def admin_client(world):
 @pytest.fixture()
 def analyst_client(world):
     return login(world["analyst"], "pw-analyst-12345")
+
+
+@pytest.fixture(autouse=True)
+def _fresh_limits():
+    from app import ratelimit
+
+    ratelimit.clear_all()
+    yield
+    ratelimit.clear_all()

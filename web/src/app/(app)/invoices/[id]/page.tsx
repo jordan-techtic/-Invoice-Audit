@@ -42,6 +42,8 @@ function Detail({ cid, id }: { cid: string; id: string }) {
   const [zoom, setZoom] = useState(false);
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
+  const [edited, setEdited] = useState(false);
+  const [recheck, setRecheck] = useState<{ busy?: boolean; text?: string; error?: string }>({});
   const pending = useRef<Set<Promise<unknown>>>(new Set());
 
   const load = useCallback(async () => {
@@ -60,6 +62,8 @@ function Detail({ cid, id }: { cid: string; id: string }) {
     } finally {
       pending.current.delete(p);
     }
+    setEdited(true);
+    setRecheck({});
     setData((d) => {
       if (!d) return d;
       const fix = (s: FieldState | undefined): FieldState => ({ value, confidence: 1, ...s, needs_review: false, note: null, corrected: true } as FieldState);
@@ -67,6 +71,14 @@ function Detail({ cid, id }: { cid: string; id: string }) {
       return { ...d, lines: d.lines.map((l) => (l.id === lineId ? { ...l, [field]: { ...fix(l[field] as FieldState), value } } : l)) };
     });
     load();
+  }
+
+  async function runRecheck() {
+    setRecheck({ busy: true });
+    try {
+      const r = await api.recheck(cid, id);
+      setRecheck({ text: `Checks updated: ${r.flags} ${r.flags === 1 ? "flag" : "flags"} (added ${r.added}, removed ${r.removed})` });
+    } catch (e) { setRecheck({ error: e instanceof Error ? e.message : "Couldn't re-check this invoice. Try again." }); }
   }
 
   async function markChecked() {
@@ -126,6 +138,20 @@ function Detail({ cid, id }: { cid: string; id: string }) {
           <span data-testid="review-status"><StatusMark status={data.review_status} /></span>
           {toCheck > 0 && <span className="num text-muted">{toCheck} {toCheck === 1 ? "field" : "fields"} to check</span>}
         </p>
+
+        {edited && (
+          <div className="mt-5 border-l-4 border-primary bg-surface px-4 py-3" data-testid="recheck-banner">
+            {recheck.text ? (
+              <p>{recheck.text}. <Link href="/review" className="font-medium text-primary underline underline-offset-4">Back to flags to review</Link></p>
+            ) : (
+              <>
+                <p className="mb-2">Your changes are saved. Re-check this invoice to update its flags.</p>
+                <button className="btn-secondary" onClick={runRecheck} disabled={recheck.busy}>{recheck.busy ? "Re-checking…" : "Re-check this invoice"}</button>
+                {recheck.error && <p role="alert" className="mt-2 text-danger">{recheck.error}</p>}
+              </>
+            )}
+          </div>
+        )}
 
         <div className="mt-5">
           <button className="btn-primary w-full text-lg" style={{ minHeight: 56 }} onClick={markChecked} disabled={checked || marking}>

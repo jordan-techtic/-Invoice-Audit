@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api, money, shortDate, type InvoiceSummary, type ReviewStatus } from "@/lib/api";
 import NeedClient from "@/components/NeedClient";
+import ReviewTabs from "@/components/ReviewTabs";
 import StatusMark from "@/components/StatusMark";
 
 type Filter = "" | ReviewStatus;
@@ -30,7 +31,8 @@ function List({ cid }: { cid: string }) {
 
   return (
     <div>
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <ReviewTabs current="invoices" />
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="text-xl">Review invoices</h1>
           <p className="mt-1 text-muted">Open an invoice to compare it with the original page and fix anything that was misread.</p>

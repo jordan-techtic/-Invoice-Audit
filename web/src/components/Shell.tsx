@@ -8,7 +8,7 @@ import { IconClients, IconReports, IconReview, IconUpload } from "./Icons";
 const NAV = [
   { href: "/clients", label: "Clients", Icon: IconClients, match: ["/clients"] },
   { href: "/upload", label: "Upload", Icon: IconUpload, match: ["/upload"] },
-  { href: "/invoices", label: "Review", Icon: IconReview, match: ["/invoices"] },
+  { href: "/review", label: "Review", Icon: IconReview, match: ["/review", "/invoices", "/flags"] },
   { href: "/reports", label: "Reports", Icon: IconReports, match: ["/reports"] },
 ];
 
@@ -17,7 +17,7 @@ export default function Shell({ children }: { children: React.ReactNode }) {
   const { user, client, signOut } = useSession();
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
-      <aside className="fixed inset-y-0 left-0 z-10 flex w-[72px] flex-col bg-sunken lg:w-[232px]">
+      <aside className="no-print fixed inset-y-0 left-0 z-10 flex w-[72px] flex-col bg-sunken lg:w-[232px]">
         <div className="px-2 pb-6 pt-6 text-center lg:px-6 lg:text-left">
           <p className="text-sm font-bold leading-tight text-primary lg:text-lg">Techtic</p>
           <p className="hidden text-base text-muted lg:block">Invoice Audit</p>
@@ -46,13 +46,16 @@ export default function Shell({ children }: { children: React.ReactNode }) {
         <div className="border-t border-line px-2 py-4 text-center lg:px-6 lg:text-left">
           <p className="hidden text-base font-medium lg:block">{user.name}</p>
           <p className="hidden text-sm capitalize text-muted lg:block">{user.role}</p>
+          {user.role === "admin" && (
+            <Link href="/admin/audit" className="mt-1 block min-h-[44px] content-center text-sm font-medium text-primary underline underline-offset-4 lg:text-base">Audit log</Link>
+          )}
           <button onClick={signOut} className="mt-1 min-h-[44px] rounded-md px-1 text-sm font-medium text-primary underline underline-offset-4 lg:px-0 lg:text-base">
             Sign out
           </button>
         </div>
       </aside>
       <div className="min-w-0 pl-[72px] lg:col-start-2 lg:pl-0">
-        <header className="flex min-h-[72px] items-center justify-between gap-4 border-b border-line px-6 lg:px-10">
+        <header className="no-print flex min-h-[72px] items-center justify-between gap-4 border-b border-line px-6 lg:px-10">
           <p className="text-lg font-bold" data-testid="active-client">
             {client ? client.name : <span className="font-medium text-muted">No client chosen</span>}
           </p>

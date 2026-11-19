@@ -1,0 +1,419 @@
+{
+  "vmrs_source": "key",
+  "invoices": 204,
+  "flags": 97,
+  "true_positive_flags": 53,
+  "overall_precision_pct": 54.6,
+  "overall_recall_pct": 88.9,
+  "planted_total": 54,
+  "planted_found": 48,
+  "flagged_dollars_total": 37186.42,
+  "flagged_dollars_on_planted": 18890.58,
+  "planted_dollars_total": 19041.14,
+  "per_rule": {
+    "labour_over_benchmark": {
+      "planted": 12,
+      "flags": 11,
+      "tp": 11,
+      "tp_dollars": 1323.4,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 11,
+      "recall_pct": 91.7,
+      "precision_pct": 100.0,
+      "planted_dollars": 1498.6
+    },
+    "repeat_repair": {
+      "planted": 9,
+      "flags": 9,
+      "tp": 7,
+      "tp_dollars": 2584.28,
+      "fp_dollars": 162.6,
+      "fp_examples": [
+        {
+          "invoice": "INV-0042",
+          "line": 4,
+          "impact": 73.5,
+          "evidence": {
+            "job": "Serpentine belt and tensioner",
+            "unit": "2113",
+            "vmrs_code": "045-001-007",
+            "limit_days": 90,
+            "line_total": 73.5,
+            "limit_miles": 10000,
+            "previous_date": "2024-06-03",
+            "previous_invoice": "INV-37433",
+            "days_since_previous": 50,
+            "miles_since_previous": 3878
+          }
+        },
+        {
+          "invoice": "INV-0127",
+          "line": 2,
+          "impact": 89.1,
+          "evidence": {
+            "job": "Shock absorber",
+            "unit": "2171",
+            "vmrs_code": "016-001-002",
+            "limit_days": 90,
+            "line_total": 89.1,
+            "limit_miles": 10000,
+            "previous_date": "2026-07-03",
+            "previous_invoice": "SI-42593",
+            "days_since_previous": 42,
+            "miles_since_previous": 6455
+          }
+        }
+      ],
+      "found": 7,
+      "recall_pct": 77.8,
+      "precision_pct": 77.8,
+      "planted_dollars": 2788.96
+    },
+    "warranty_eligible": {
+      "planted": 7,
+      "flags": 18,
+      "tp": 7,
+      "tp_dollars": 6325.11,
+      "fp_dollars": 5467.9,
+      "fp_examples": [
+        {
+          "invoice": "INV-0109",
+          "line": 2,
+          "impact": 1285.28,
+          "evidence": {
+            "unit": "TR21",
+            "claimable": 1285.28,
+            "component": "Drive tire",
+            "vmrs_code": "017-001-002",
+            "previous_date": "2024-04-01",
+            "warranty_miles": null,
+            "warranty_months": 12,
+            "previous_invoice": "42548",
+            "days_since_previous": 224,
+            "miles_since_previous": null
+          }
+        },
+        {
+          "invoice": "INV-0029",
+          "line": 1,
+          "impact": 73.12,
+          "evidence": {
+            "unit": "T281",
+            "claimable": 73.12,
+            "component": "Brake chamber",
+            "vmrs_code": "013-001-007",
+            "previous_date": "2024-01-12",
+            "warranty_miles": 100000,
+            "warranty_months": 12,
+            "previous_invoice": "SI-42551",
+            "days_since_previous": 35,
+            "miles_since_previous": 6032
+          }
+        },
+        {
+          "invoice": "INV-0029",
+          "line": 3,
+          "impact": 128.7,
+          "evidence": {
+            "unit": "T281",
+            "claimable": 128.7,
+            "component": "Brake chamber",
+            "vmrs_code": "013-001-007",
+            "previous_date": "2024-01-12",
+            "warranty_miles": 100000,
+            "warranty_months": 12,
+            "previous_invoice": "SI-42551",
+            "days_since_previous": 35,
+            "miles_since_previous": 6032
+          }
+        },
+        {
+          "invoice": "INV-0098",
+          "line": 2,
+          "impact": 460.22,
+          "evidence": {
+            "unit": "TR21",
+            "claimable": 460.22,
+            "component": "Brake chamber",
+            "vmrs_code": "013-001-007",
+            "previous_date": "2024-09-27",
+            "warranty_miles": 100000,
+            "warranty_months": 12,
+            "previous_invoice": "21798",
+            "days_since_previous": 161,
+            "miles_since_previous": null
+          }
+        },
+        {
+          "invoice": "INV-0144",
+          "line": 1,
+          "impact": 1077.65,
+          "evidence": {
+            "unit": "T307",
+            "claimable": 1077.65,
+            "component": "Steer tire",
+            "vmrs_code": "017-001-001",
+            "previous_date": "2025-06-12",
+            "warranty_miles": null,
+            "warranty_months": 12,
+            "previous_invoice": "R24672",
+            "days_since_previous": 238,
+            "miles_since_previous": 36262
+          }
+        },
+        {
+          "invoice": "INV-0135",
+          "line": 2,
+          "impact": 168.3,
+          "evidence": {
+            "unit": "T187",
+            "claimable": 168.3,
+            "component": "Alternator",
+            "vmrs_code": "031-001-001",
+            "previous_date": "2024-11-26",
+            "warranty_miles": 100000,
+            "warranty_months": 12,
+            "previous_invoice": "37650",
+            "days_since_previous": 121,
+            "miles_since_previous": 18755
+          }
+        }
+      ],
+      "found": 7,
+      "recall_pct": 100.0,
+      "precision_pct": 38.9,
+      "planted_dollars": 6325.11
+    },
+    "parts_price_outlier": {
+      "planted": 10,
+      "flags": 14,
+      "tp": 7,
+      "tp_dollars": 1290.3,
+      "fp_dollars": 5703.82,
+      "fp_examples": [
+        {
+          "invoice": "INV-0043",
+          "line": 2,
+          "impact": 848.26,
+          "evidence": {
+            "qty": 2.0,
+            "samples": 5,
+            "over_pct": 91.5,
+            "unit_price": 887.46,
+            "part_number": "TR-11R225S",
+            "median_price": 463.33,
+            "shops_selling": 5
+          }
+        },
+        {
+          "invoice": "INV-0053",
+          "line": 1,
+          "impact": 1362.32,
+          "evidence": {
+            "qty": 4.0,
+            "samples": 6,
+            "over_pct": 282.5,
+            "unit_price": 461.16,
+            "part_number": "BS-4707Q",
+            "median_price": 120.58,
+            "shops_selling": 6
+          }
+        },
+        {
+          "invoice": "INV-0060",
+          "line": 2,
+          "impact": 487.1,
+          "evidence": {
+            "qty": 2.0,
+            "samples": 4,
+            "over_pct": 85.5,
+            "unit_price": 528.34,
+            "part_number": "TR-11R225D",
+            "median_price": 284.79,
+            "shops_selling": 3
+          }
+        },
+        {
+          "invoice": "INV-0069",
+          "line": 1,
+          "impact": 260.4,
+          "evidence": {
+            "qty": 2.0,
+            "samples": 6,
+            "over_pct": 90.0,
+            "unit_price": 274.84,
+            "part_number": "WB-JM207049",
+            "median_price": 144.64,
+            "shops_selling": 5
+          }
+        },
+        {
+          "invoice": "INV-0069",
+          "line": 2,
+          "impact": 1032.6,
+          "evidence": {
+            "qty": 4.0,
+            "samples": 5,
+            "over_pct": 254.1,
+            "unit_price": 359.76,
+            "part_number": "SP-4709",
+            "median_price": 101.61,
+            "shops_selling": 3
+          }
+        },
+        {
+          "invoice": "INV-0098",
+          "line": 1,
+          "impact": 531.92,
+          "evidence": {
+            "qty": 4.0,
+            "samples": 7,
+            "over_pct": 305.4,
+            "unit_price": 176.52,
+            "part_number": "WS-370066",
+            "median_price": 43.54,
+            "shops_selling": 6
+          }
+        }
+      ],
+      "found": 7,
+      "recall_pct": 70.0,
+      "precision_pct": 50.0,
+      "planted_dollars": 1754.58
+    },
+    "duplicate": {
+      "planted": 4,
+      "flags": 4,
+      "tp": 4,
+      "tp_dollars": 6198.5,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 4,
+      "recall_pct": 100.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 6198.5
+    },
+    "math_error": {
+      "planted": 12,
+      "flags": 41,
+      "tp": 17,
+      "tp_dollars": 1168.99,
+      "fp_dollars": 6961.52,
+      "fp_examples": [
+        {
+          "invoice": "INV-0043",
+          "line": 1,
+          "impact": 436.8,
+          "evidence": {
+            "qty": 1.0,
+            "check": "line_total",
+            "difference": 436.8,
+            "labour_rate": null,
+            "parts_price": 509.14,
+            "labour_hours": null,
+            "printed_total": 945.94
+          }
+        },
+        {
+          "invoice": "INV-0043",
+          "line": 2,
+          "impact": 179.2,
+          "evidence": {
+            "qty": 2.0,
+            "check": "line_total",
+            "difference": 179.2,
+            "labour_rate": null,
+            "parts_price": 887.46,
+            "labour_hours": null,
+            "printed_total": 1066.66
+          }
+        },
+        {
+          "invoice": "INV-0053",
+          "line": 1,
+          "impact": 515.2,
+          "evidence": {
+            "qty": 4.0,
+            "check": "line_total",
+            "difference": 515.2,
+            "labour_rate": null,
+            "parts_price": 461.16,
+            "labour_hours": null,
+            "printed_total": 976.36
+          }
+        },
+        {
+          "invoice": "INV-0060",
+          "line": 1,
+          "impact": 246.4,
+          "evidence": {
+            "qty": 1.0,
+            "check": "line_total",
+            "difference": 246.4,
+            "labour_rate": null,
+            "parts_price": 410.33,
+            "labour_hours": null,
+            "printed_total": 656.73
+          }
+        },
+        {
+          "invoice": "INV-0060",
+          "line": 2,
+          "impact": 246.4,
+          "evidence": {
+            "qty": 2.0,
+            "check": "line_total",
+            "difference": 246.4,
+            "labour_rate": null,
+            "parts_price": 528.34,
+            "labour_hours": null,
+            "printed_total": 774.74
+          }
+        },
+        {
+          "invoice": "INV-0067",
+          "line": 1,
+          "impact": 190.4,
+          "evidence": {
+            "qty": 1.0,
+            "check": "line_total",
+            "difference": 190.4,
+            "labour_rate": null,
+            "parts_price": 92.59,
+            "labour_hours": null,
+            "printed_total": 282.99
+          }
+        }
+      ],
+      "found": 12,
+      "recall_pct": 100.0,
+      "precision_pct": 41.5,
+      "planted_dollars": 475.39
+    }
+  },
+  "run_summary": {
+    "flags": 97,
+    "by_type": {
+      "labour_over_benchmark": 11,
+      "repeat_repair": 9,
+      "warranty_eligible": 18,
+      "parts_price_outlier": 14,
+      "duplicate": 4,
+      "math_error": 41
+    },
+    "notes": [
+      "Labour check skipped for 2 job type(s): not enough data to set a typical time."
+    ],
+    "invoices": 204,
+    "benchmarked_job_types": 26,
+    "priced_parts": 43
+  },
+  "engine_seconds": 0.23,
+  "explanation_cost_usd": 0.10325,
+  "explanation_tokens": [
+    17700,
+    5900
+  ],
+  "explanation_cost_per_invoice_usd": 0.00051
+}

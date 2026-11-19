@@ -1,0 +1,254 @@
+{
+  "vmrs_source": "key",
+  "warranty_rules": "defaults",
+  "invoices": 204,
+  "flags": 56,
+  "true_positive_flags": 49,
+  "overall_precision_pct": 87.5,
+  "overall_recall_pct": 88.9,
+  "planted_total": 54,
+  "planted_found": 48,
+  "flagged_dollars_total": 23613.38,
+  "flagged_dollars_on_planted": 18534.58,
+  "planted_dollars_total": 19041.14,
+  "per_rule": {
+    "labour_over_benchmark": {
+      "planted": 12,
+      "flags": 11,
+      "tp": 11,
+      "tp_dollars": 1323.4,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 11,
+      "recall_pct": 91.7,
+      "precision_pct": 100.0,
+      "planted_dollars": 1498.6,
+      "missed": [
+        {
+          "key_id": "INV-0096",
+          "line": 2,
+          "dollars": 105.6
+        }
+      ]
+    },
+    "repeat_repair": {
+      "planted": 9,
+      "flags": 7,
+      "tp": 7,
+      "tp_dollars": 2746.88,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 7,
+      "recall_pct": 77.8,
+      "precision_pct": 100.0,
+      "planted_dollars": 2788.96,
+      "missed": [
+        {
+          "key_id": "INV-0029",
+          "line": 1,
+          "dollars": 73.12
+        },
+        {
+          "key_id": "INV-0124",
+          "line": 1,
+          "dollars": 131.56
+        }
+      ]
+    },
+    "warranty_eligible": {
+      "planted": 7,
+      "flags": 14,
+      "tp": 7,
+      "tp_dollars": 6714.21,
+      "fp_dollars": 5078.8,
+      "fp_examples": [
+        {
+          "invoice": "INV-0109",
+          "line": 2,
+          "impact": 1285.28,
+          "evidence": {
+            "unit": "TR21",
+            "claimable": 1285.28,
+            "component": "Drive tire",
+            "vmrs_code": "017-001-002",
+            "previous_date": "2024-04-01",
+            "warranty_miles": null,
+            "warranty_months": 12,
+            "previous_invoice": "42548",
+            "days_since_previous": 224,
+            "miles_since_previous": null
+          }
+        },
+        {
+          "invoice": "INV-0029",
+          "line": 1,
+          "impact": 201.82,
+          "evidence": {
+            "unit": "T281",
+            "claimable": 201.82,
+            "component": "Brake chamber",
+            "vmrs_code": "013-001-007",
+            "previous_date": "2024-01-12",
+            "warranty_miles": 100000,
+            "warranty_months": 12,
+            "previous_invoice": "SI-42551",
+            "days_since_previous": 35,
+            "miles_since_previous": 6032
+          }
+        },
+        {
+          "invoice": "INV-0098",
+          "line": 2,
+          "impact": 460.22,
+          "evidence": {
+            "unit": "TR21",
+            "claimable": 460.22,
+            "component": "Brake chamber",
+            "vmrs_code": "013-001-007",
+            "previous_date": "2024-09-27",
+            "warranty_miles": 100000,
+            "warranty_months": 12,
+            "previous_invoice": "21798",
+            "days_since_previous": 161,
+            "miles_since_previous": null
+          }
+        },
+        {
+          "invoice": "INV-0144",
+          "line": 1,
+          "impact": 1077.65,
+          "evidence": {
+            "unit": "T307",
+            "claimable": 1077.65,
+            "component": "Steer tire",
+            "vmrs_code": "017-001-001",
+            "previous_date": "2025-06-12",
+            "warranty_miles": null,
+            "warranty_months": 12,
+            "previous_invoice": "R24672",
+            "days_since_previous": 238,
+            "miles_since_previous": 36262
+          }
+        },
+        {
+          "invoice": "INV-0141",
+          "line": 1,
+          "impact": 839.24,
+          "evidence": {
+            "unit": "2250",
+            "claimable": 839.24,
+            "component": "Drive tire",
+            "vmrs_code": "017-001-002",
+            "previous_date": "2024-04-04",
+            "warranty_miles": null,
+            "warranty_months": 12,
+            "previous_invoice": "19464",
+            "days_since_previous": 267,
+            "miles_since_previous": 47492
+          }
+        },
+        {
+          "invoice": "INV-0096",
+          "line": 1,
+          "impact": 447.47,
+          "evidence": {
+            "unit": "T341",
+            "claimable": 447.47,
+            "component": "Air dryer",
+            "vmrs_code": "013-002-002",
+            "previous_date": "2025-01-07",
+            "warranty_miles": 100000,
+            "warranty_months": 12,
+            "previous_invoice": "28266",
+            "days_since_previous": 304,
+            "miles_since_previous": 63514
+          }
+        }
+      ],
+      "found": 7,
+      "recall_pct": 100.0,
+      "precision_pct": 50.0,
+      "planted_dollars": 6325.11,
+      "missed": []
+    },
+    "parts_price_outlier": {
+      "planted": 10,
+      "flags": 7,
+      "tp": 7,
+      "tp_dollars": 976.2,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 7,
+      "recall_pct": 70.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 1754.58,
+      "missed": [
+        {
+          "key_id": "INV-0110",
+          "line": 1,
+          "dollars": 52.69
+        },
+        {
+          "key_id": "INV-0112",
+          "line": 2,
+          "dollars": 288.2
+        },
+        {
+          "key_id": "INV-0144",
+          "line": 1,
+          "dollars": 402.25
+        }
+      ]
+    },
+    "duplicate": {
+      "planted": 4,
+      "flags": 4,
+      "tp": 4,
+      "tp_dollars": 6198.5,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 4,
+      "recall_pct": 100.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 6198.5,
+      "missed": []
+    },
+    "math_error": {
+      "planted": 12,
+      "flags": 13,
+      "tp": 13,
+      "tp_dollars": 575.39,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 12,
+      "recall_pct": 100.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 475.39,
+      "missed": []
+    }
+  },
+  "run_summary": {
+    "flags": 56,
+    "by_type": {
+      "labour_over_benchmark": 11,
+      "repeat_repair": 7,
+      "warranty_eligible": 14,
+      "parts_price_outlier": 7,
+      "duplicate": 4,
+      "math_error": 13
+    },
+    "notes": [
+      "Labour check skipped for 2 job type(s): not enough data to set a typical time."
+    ],
+    "invoices": 204,
+    "benchmarked_job_types": 26,
+    "priced_parts": 43
+  },
+  "engine_seconds": 0.19,
+  "explanation_cost_usd": 0.09275,
+  "explanation_tokens": [
+    15900,
+    5300
+  ],
+  "explanation_cost_per_invoice_usd": 0.00045
+}

@@ -29,8 +29,10 @@ class Settings(BaseSettings):
 
     # AI
     anthropic_api_key: str | None = None
-    extraction_provider: str = "claude"  # claude | fake
+    ai_provider: str = "openai"  # openai | claude | fake | oracle
     claude_model: str = "claude-sonnet-5-5"
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-4o"
     # Zero-retention: when true we only send data to the AI API under a ZDR agreement
     # and never to any other third party. Set false to disable all AI calls.
     ai_enabled: bool = True
@@ -41,12 +43,15 @@ class Settings(BaseSettings):
     ai_zdr_confirmed: bool = False
     confidence_threshold: float = 0.80
     extraction_retries: int = 1  # retries after the first malformed response
+    ai_redact_before_send: bool = False  # mask VINs and phone numbers in TEXT sent to the AI (page images can't be masked)
+    login_max_attempts: int = 5
+    login_window_seconds: int = 900
     max_upload_mb: int = 25
     max_pdf_pages: int = 100
     queue_inline: bool = False  # tests and the offline eval run jobs synchronously
-    # Price per million tokens, used only to estimate cost per invoice. Check against current Anthropic pricing.
-    price_input_per_mtok: float = 3.0
-    price_output_per_mtok: float = 15.0
+    # Price per million tokens, used only to estimate cost per invoice (defaults are gpt-4o list prices: verify them).
+    price_input_per_mtok: float = 2.5
+    price_output_per_mtok: float = 10.0
 
     # Inbound email webhook shared secret
     inbound_email_secret: str = "local-inbound-secret"

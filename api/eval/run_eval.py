@@ -1,7 +1,7 @@
 """Run the pipeline on the synthetic set and measure it against the answer key.
 
 Usage (inside the api container):
-  python -m eval.run_eval --synthetic /synthetic/out --provider claude|oracle [--limit 50] [--out /app/eval_out]
+  python -m eval.run_eval --synthetic /synthetic/out --provider openai|claude|oracle [--limit 50] [--out /app/eval_out]
 """
 
 from __future__ import annotations
@@ -84,7 +84,7 @@ class Tally:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--synthetic", required=True)
-    ap.add_argument("--provider", choices=["claude", "oracle"], required=True)
+    ap.add_argument("--provider", choices=["openai", "claude", "oracle"], required=True)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--out", default="/app/eval_out")
     ap.add_argument("--seed", type=int, default=1)
@@ -96,13 +96,13 @@ def main() -> None:
 
     s = get_settings()
     if a.provider == "oracle":
-        os.environ["EXTRACTION_PROVIDER"] = "oracle"
+        os.environ["AI_PROVIDER"] = "oracle"
         get_settings.cache_clear()
         from app.services.extraction.fake import FakeProvider
 
         FakeProvider.reset()
     else:
-        os.environ["EXTRACTION_PROVIDER"] = "claude"
+        os.environ["AI_PROVIDER"] = a.provider
         get_settings.cache_clear()
 
     from app import storage
@@ -197,7 +197,7 @@ def main() -> None:
     ai_ms = sum(r.duration_ms for r in runs)
     report = {
         "provider": a.provider,
-        "model": s.claude_model if a.provider == "claude" else "oracle (offline; no image is read)",
+        "model": {"openai": get_settings().openai_model, "claude": get_settings().claude_model}.get(a.provider, "oracle (offline; no image is read)"),
         "files": len(files), "invoices": invoices_total,
         "overall": overall.as_dict(), "header_only": header_all.as_dict(),
         "per_field": {**{f: header_t[f].as_dict() for f in HEADER}, **{"line." + f: line_t[f].as_dict() for f in LINE}},

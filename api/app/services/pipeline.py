@@ -206,6 +206,8 @@ def _store_invoice(db, up: Upload, merged, result, threshold: float, provider) -
             vmrs_code=cls.code,
             vmrs_confidence=cls.confidence,
             vmrs_source=cls.source,
+            page_no=(merged.line_meta[n - 1]["page"] if merged.line_meta and n - 1 < len(merged.line_meta) else None),
+            y_center=(merged.line_meta[n - 1]["y"] if merged.line_meta and n - 1 < len(merged.line_meta) else None),
         )
         db.add(row)
         db.flush()

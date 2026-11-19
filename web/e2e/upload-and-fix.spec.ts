@@ -30,6 +30,7 @@ test("upload three invoices, fix the odometer, mark as checked", async ({ page }
   await expect(page.getByRole("link", { name: "Review invoices" }).first()).toBeVisible();
 
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Review" }).click();
+  await page.getByRole("navigation", { name: "Review sections" }).getByRole("link", { name: "Invoices" }).click();
   await page.getByLabel("Show").selectOption("needs_review");
   await page.getByRole("link").filter({ hasText: /./ }).and(page.locator("tbody a")).first().click();
 

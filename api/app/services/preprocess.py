@@ -7,7 +7,7 @@ import math
 
 import cv2
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image, ImageFile, ImageOps
 
 MAX_SIDE = 2000
 JPEG_QUALITY = 88
@@ -57,6 +57,7 @@ def render_pages(data: bytes, kind: str, max_pages: int = 100) -> list[Image.Ima
         return out
     if kind == "heic":
         _register_heif()
+    ImageFile.LOAD_TRUNCATED_IMAGES = False  # WeasyPrint turns this on globally; a cut-off upload must fail, not load half a page
     try:
         img = Image.open(io.BytesIO(data))
         img.load()

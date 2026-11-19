@@ -1,0 +1,112 @@
+{
+  "vmrs_source": "key",
+  "warranty_rules": "aligned",
+  "invoices": 204,
+  "flags": 50,
+  "true_positive_flags": 50,
+  "overall_precision_pct": 100.0,
+  "overall_recall_pct": 90.7,
+  "planted_total": 54,
+  "planted_found": 49,
+  "flagged_dollars_total": 18736.4,
+  "flagged_dollars_on_planted": 18736.4,
+  "planted_dollars_total": 19041.14,
+  "per_rule": {
+    "labour_over_benchmark": {
+      "planted": 12,
+      "flags": 11,
+      "tp": 11,
+      "tp_dollars": 1323.4,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 11,
+      "recall_pct": 91.7,
+      "precision_pct": 100.0,
+      "planted_dollars": 1498.6
+    },
+    "repeat_repair": {
+      "planted": 9,
+      "flags": 8,
+      "tp": 8,
+      "tp_dollars": 2948.7,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 8,
+      "recall_pct": 88.9,
+      "precision_pct": 100.0,
+      "planted_dollars": 2788.96
+    },
+    "warranty_eligible": {
+      "planted": 7,
+      "flags": 7,
+      "tp": 7,
+      "tp_dollars": 6714.21,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 7,
+      "recall_pct": 100.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 6325.11
+    },
+    "parts_price_outlier": {
+      "planted": 10,
+      "flags": 7,
+      "tp": 7,
+      "tp_dollars": 976.2,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 7,
+      "recall_pct": 70.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 1754.58
+    },
+    "duplicate": {
+      "planted": 4,
+      "flags": 4,
+      "tp": 4,
+      "tp_dollars": 6198.5,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 4,
+      "recall_pct": 100.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 6198.5
+    },
+    "math_error": {
+      "planted": 12,
+      "flags": 13,
+      "tp": 13,
+      "tp_dollars": 575.39,
+      "fp_dollars": 0.0,
+      "fp_examples": [],
+      "found": 12,
+      "recall_pct": 100.0,
+      "precision_pct": 100.0,
+      "planted_dollars": 475.39
+    }
+  },
+  "run_summary": {
+    "flags": 50,
+    "by_type": {
+      "labour_over_benchmark": 11,
+      "repeat_repair": 8,
+      "warranty_eligible": 7,
+      "parts_price_outlier": 7,
+      "duplicate": 4,
+      "math_error": 13
+    },
+    "notes": [
+      "Labour check skipped for 2 job type(s): not enough data to set a typical time."
+    ],
+    "invoices": 204,
+    "benchmarked_job_types": 26,
+    "priced_parts": 43
+  },
+  "engine_seconds": 0.19,
+  "explanation_cost_usd": 0.08575,
+  "explanation_tokens": [
+    14700,
+    4900
+  ],
+  "explanation_cost_per_invoice_usd": 0.00042
+}
