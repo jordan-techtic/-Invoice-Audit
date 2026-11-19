@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --surface-sunken: #e9edf2;
+  --line: #d5dce4;
+  --line-strong: #7a8899;
+  --ink: #1b2b3a;
+  --ink-muted: #4f5f70;
+  --primary: #1f3a56;
+  --primary-hover: #16304a;
+  --money: #8f5a00;
+  --amber: #f2a900;
+  --amber-soft: #fff4d9;
+  --confirmed: #1e7046;
+  --confirmed-soft: #e4f2ea;
+  --dismissed: #5f6b78;
+  --dismissed-soft: #eceff2;
+  --danger: #b42318;
+}
+
+@layer base {
+  html {
+    font-size: 16px;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-figtree), system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+  h1, h2, h3 {
+    font-weight: 700;
+  }
+}
+
+@layer components {
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  .btn {
+    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-md px-5 text-base font-medium transition-colors;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-dismissed-soft disabled:text-muted;
+  }
+  .btn-secondary {
+    @apply btn border border-line-strong bg-surface text-ink hover:bg-sunken disabled:cursor-not-allowed disabled:opacity-60;
+  }
+  .field {
+    @apply min-h-[44px] w-full rounded-md border border-line-strong bg-surface px-3 text-base text-ink;
+  }
+  .field[aria-invalid="true"] {
+    border-color: var(--danger);
+    box-shadow: inset 3px 0 0 var(--danger);
+  }
+  .th {
+    @apply whitespace-nowrap px-4 py-3 text-left text-sm font-medium text-muted;
+  }
+  .td {
+    @apply px-4 py-3 align-middle;
+  }
+  .tr {
+    @apply h-14 border-t border-line;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

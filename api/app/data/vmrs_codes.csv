@@ -1,0 +1,113 @@
+code,system,component,keywords
+001-001-001,Air conditioning heating and ventilating,A/C compressor,ac compressor;a/c compressor;air conditioning compressor
+001-001-002,Air conditioning heating and ventilating,A/C condenser,ac condenser;condenser
+001-001-003,Air conditioning heating and ventilating,A/C evaporator,evaporator
+001-001-004,Air conditioning heating and ventilating,Receiver drier,receiver drier;drier;accumulator
+001-001-005,Air conditioning heating and ventilating,A/C refrigerant recharge,recharge;freon;refrigerant;r134a;evacuate
+001-002-001,Air conditioning heating and ventilating,Heater core,heater core
+001-002-002,Air conditioning heating and ventilating,Blower motor,blower motor;hvac fan;blower
+001-003-001,Air conditioning heating and ventilating,HVAC control head,hvac control;climate control
+002-001-001,Cab and sheet metal,Windshield,windshield;windscreen
+002-001-002,Cab and sheet metal,Side mirror,mirror;side mirror
+002-001-003,Cab and sheet metal,Door latch and handle,door latch;door handle
+002-001-004,Cab and sheet metal,Hood and hood hinge,hood;hood hinge
+002-001-005,Cab and sheet metal,Wiper motor,wiper motor;wipers;wiper blade
+002-002-001,Cab and sheet metal,Driver seat,seat;driver seat;air seat
+002-003-001,Cab and sheet metal,Cab air suspension,cab air bag;cab suspension;cab shock
+003-001-001,Instruments gauges and warning devices,Instrument cluster,instrument cluster;dash cluster;gauge cluster
+003-001-002,Instruments gauges and warning devices,Speedometer sensor,speed sensor;speedometer
+003-001-003,Instruments gauges and warning devices,Air pressure gauge,air gauge;air pressure gauge
+011-001-001,Axle front non-driven,King pin kit,king pin;kingpin
+011-001-002,Axle front non-driven,Front axle beam,front axle
+013-001-001,Brakes,Brake shoes,brake shoe;shoes;reline;brake lining;brakes
+013-001-002,Brakes,Brake drum,drum;brake drum
+013-001-003,Brakes,Air disc brake pads,disc pad;brake pad;pads
+013-001-004,Brakes,Brake rotor,rotor;brake rotor
+013-001-005,Brakes,Slack adjuster,slack adjuster;slack
+013-001-006,Brakes,S-cam and bushings,s-cam;camshaft brake;cam bushing
+013-001-007,Brakes,Brake chamber,brake chamber;spring brake;maxi can;air chamber
+013-002-001,Brakes,Air compressor,air compressor;compressor brake
+013-002-002,Brakes,Air dryer,air dryer;dryer cartridge;desiccant
+013-002-003,Brakes,Brake valve,relay valve;treadle;foot valve;brake valve;quick release valve
+013-002-004,Brakes,Air lines and fittings,air line;air hose;gladhand;fittings
+013-003-001,Brakes,ABS sensor,abs sensor;wheel speed sensor
+013-003-002,Brakes,ABS modulator valve,abs valve;modulator
+013-003-003,Brakes,ABS ECU,abs ecu;abs module
+014-001-001,Frame,Frame rail repair,frame;frame rail;crossmember
+014-001-002,Frame,Fifth wheel,fifth wheel;5th wheel
+014-001-003,Frame,Mud flaps and brackets,mud flap;splash guard
+015-001-001,Steering,Power steering pump,power steering pump;ps pump
+015-001-002,Steering,Steering gear,steering gear;steering box
+015-001-003,Steering,Tie rod end,tie rod;tie rod end;cross tube
+015-001-004,Steering,Drag link,drag link
+015-001-005,Steering,Steering column,steering column;steering shaft
+015-001-006,Steering,Front-end alignment,alignment;align;toe
+016-001-001,Suspension,Leaf spring,leaf spring;spring pack
+016-001-002,Suspension,Shock absorber,shock;shock absorber;shocks;shock absorber;leaking shock
+016-001-003,Suspension,Air spring (air bag),air bag;air spring;bellow
+016-001-004,Suspension,Torque rod,torque rod
+016-001-005,Suspension,Leveling valve,leveling valve;height control valve
+016-001-006,Suspension,Equalizer and bushings,equalizer;walking beam;suspension bushing
+017-001-001,Tires,Steer tire,steer tire;tire steer;front tire;steer tire;steer tires;front tire;replace steer
+017-001-002,Tires,Drive tire,drive tire;drive tire;drive tires;mtd & balanced
+017-001-003,Tires,Trailer tire,trailer tire
+017-001-004,Tires,Tire repair,flat repair;tire repair;patch;plug
+017-001-005,Tires,Tire mount and balance,mount and balance;balance;dismount
+018-001-001,Wheels hubs and bearings,Wheel seal,wheel seal;hub seal;oil seal
+018-001-002,Wheels hubs and bearings,Wheel bearing,wheel bearing;bearing cone;bearing cup
+018-001-003,Wheels hubs and bearings,Hub assembly,hub;hub assembly
+018-001-004,Wheels hubs and bearings,Wheel stud and nut,wheel stud;lug nut;stud
+018-001-005,Wheels hubs and bearings,Wheel,wheel;rim
+022-001-001,Axle driven,Differential,differential;diff;carrier;ring and pinion
+022-001-002,Axle driven,Axle shaft,axle shaft
+022-001-003,Axle driven,Inter-axle differential,inter-axle;power divider;ipd
+022-001-004,Axle driven,Pinion seal,pinion seal
+023-001-001,Clutch,Clutch assembly,clutch;clutch kit;pressure plate;clutch disc
+023-001-002,Clutch,Clutch adjustment,clutch adjust;clutch adjustment
+023-001-003,Clutch,Release bearing,release bearing;throwout bearing
+024-001-001,Drive shaft,U-joint,u-joint;universal joint;ujoint
+024-001-002,Drive shaft,Driveshaft,driveshaft;drive shaft;propeller shaft
+024-001-003,Drive shaft,Carrier bearing,carrier bearing;center bearing
+026-001-001,Transmission manual,Manual transmission,transmission;trans rebuild;gearbox
+026-001-002,Transmission manual,Shift lever and linkage,shifter;shift lever;linkage
+026-001-003,Transmission manual,Transmission seal,trans seal;rear seal;output seal
+027-001-001,Transmission automatic,Automated transmission,automatic transmission;amt;allison
+027-001-002,Transmission automatic,Transmission service,trans service;transmission fluid;trans filter
+031-001-001,Charging system,Alternator,alternator;charging
+031-001-002,Charging system,Alternator belt,alternator belt
+031-002-001,Charging system,Battery,battery;batteries
+031-002-002,Charging system,Battery cables,battery cable;ground strap;battery terminal
+032-001-001,Cranking system,Starter motor,starter;starter motor;cranking
+032-001-002,Cranking system,Starter solenoid,solenoid;starter relay
+034-001-001,Lighting system,Headlamp,headlight;headlamp
+034-001-002,Lighting system,Marker and clearance lamps,marker light;clearance lamp;marker lamp
+034-001-003,Lighting system,Tail and stop lamps,tail light;brake light;stop lamp
+034-001-004,Lighting system,Wiring harness,wiring;harness;pigtail;connector
+041-001-001,Air intake system,Air filter,air filter;air cleaner
+041-001-002,Air intake system,Charge air cooler,charge air cooler;intercooler;cac
+041-001-003,Air intake system,Turbocharger,turbo;turbocharger
+042-001-001,Cooling system,Radiator,radiator
+042-001-002,Cooling system,Water pump,water pump;coolant pump
+042-001-003,Cooling system,Thermostat,thermostat
+042-001-004,Cooling system,Coolant hoses,coolant hose;radiator hose;heater hose
+042-001-005,Cooling system,Fan clutch,fan clutch;fan hub;fan drive
+042-001-006,Cooling system,Coolant service,coolant flush;antifreeze;coolant
+043-001-001,Exhaust system,Diesel particulate filter,dpf;particulate filter;dpf clean
+043-001-002,Exhaust system,DEF/SCR system,def pump;scr;def doser;def;nox sensor;def fault;def dosing;dosing valve;def system
+043-001-003,Exhaust system,EGR valve and cooler,egr;egr valve;egr cooler
+043-001-004,Exhaust system,Exhaust pipe and clamps,exhaust pipe;muffler;exhaust clamp
+044-001-001,Fuel system,Fuel injector,injector;fuel injector
+044-001-002,Fuel system,Fuel filter,fuel filter;water separator
+044-001-003,Fuel system,Fuel pump,fuel pump;lift pump
+044-001-004,Fuel system,Fuel tank and straps,fuel tank;tank strap
+045-001-001,Power plant,Engine oil and filter service,oil change;pm service;lube oil filter;preventive maintenance;pm svc;pm service;chassis lube;lube oil;oil and filter;oil & filter;lube job;pm-a;pm-b
+045-001-002,Power plant,Engine overhaul,overhaul;in-frame;out-of-frame;rebuild engine
+045-001-003,Power plant,Cylinder head,cylinder head;head gasket
+045-001-004,Power plant,Oil pan gasket,oil pan;pan gasket
+045-001-005,Power plant,Engine mounts,engine mount;motor mount
+045-001-006,Power plant,Valve adjustment,overhead;valve adjust;valve lash
+045-001-007,Power plant,Serpentine belt and tensioner,serpentine;belt tensioner;idler pulley;drive belt
+045-001-008,Power plant,Engine diagnostics,diagnostic;diag;scan;check engine
+071-001-001,Body,Liftgate,liftgate;lift gate;tailgate lift
+071-001-002,Body,Trailer door and hinges,trailer door;roll door;swing door
+071-001-003,Body,Reefer unit service,reefer;refrigeration unit;thermo king;carrier unit

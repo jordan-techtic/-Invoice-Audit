@@ -1,0 +1,839 @@
+{
+  "provider": "oracle",
+  "model": "oracle (offline; no image is read)",
+  "files": 199,
+  "invoices": 204,
+  "overall": {
+    "fields": 7108,
+    "accuracy_pct": 96.29,
+    "sent_to_review_pct": 7.25,
+    "wrong": 264,
+    "wrong_caught_pct": 78.79
+  },
+  "header_only": {
+    "fields": 2040,
+    "accuracy_pct": 94.31,
+    "sent_to_review_pct": 9.71,
+    "wrong": 116,
+    "wrong_caught_pct": 80.17
+  },
+  "per_field": {
+    "shop_name": {
+      "fields": 204,
+      "accuracy_pct": 92.65,
+      "sent_to_review_pct": 10.29,
+      "wrong": 15,
+      "wrong_caught_pct": 86.67
+    },
+    "shop_address": {
+      "fields": 204,
+      "accuracy_pct": 96.08,
+      "sent_to_review_pct": 5.39,
+      "wrong": 8,
+      "wrong_caught_pct": 87.5
+    },
+    "invoice_number": {
+      "fields": 204,
+      "accuracy_pct": 96.08,
+      "sent_to_review_pct": 4.41,
+      "wrong": 8,
+      "wrong_caught_pct": 62.5
+    },
+    "invoice_date": {
+      "fields": 204,
+      "accuracy_pct": 92.65,
+      "sent_to_review_pct": 7.84,
+      "wrong": 15,
+      "wrong_caught_pct": 93.33
+    },
+    "unit_number": {
+      "fields": 204,
+      "accuracy_pct": 93.63,
+      "sent_to_review_pct": 10.78,
+      "wrong": 13,
+      "wrong_caught_pct": 76.92
+    },
+    "vin": {
+      "fields": 204,
+      "accuracy_pct": 95.59,
+      "sent_to_review_pct": 7.35,
+      "wrong": 9,
+      "wrong_caught_pct": 100.0
+    },
+    "odometer": {
+      "fields": 204,
+      "accuracy_pct": 94.12,
+      "sent_to_review_pct": 5.88,
+      "wrong": 12,
+      "wrong_caught_pct": 58.33
+    },
+    "subtotal": {
+      "fields": 204,
+      "accuracy_pct": 94.12,
+      "sent_to_review_pct": 20.1,
+      "wrong": 12,
+      "wrong_caught_pct": 91.67
+    },
+    "tax": {
+      "fields": 204,
+      "accuracy_pct": 94.12,
+      "sent_to_review_pct": 6.86,
+      "wrong": 12,
+      "wrong_caught_pct": 58.33
+    },
+    "total": {
+      "fields": 204,
+      "accuracy_pct": 94.12,
+      "sent_to_review_pct": 18.14,
+      "wrong": 12,
+      "wrong_caught_pct": 83.33
+    },
+    "line.description": {
+      "fields": 724,
+      "accuracy_pct": 100.0,
+      "sent_to_review_pct": 7.32,
+      "wrong": 0,
+      "wrong_caught_pct": 0.0
+    },
+    "line.part_number": {
+      "fields": 724,
+      "accuracy_pct": 98.62,
+      "sent_to_review_pct": 2.49,
+      "wrong": 10,
+      "wrong_caught_pct": 60.0
+    },
+    "line.qty": {
+      "fields": 724,
+      "accuracy_pct": 97.65,
+      "sent_to_review_pct": 3.04,
+      "wrong": 17,
+      "wrong_caught_pct": 70.59
+    },
+    "line.parts_price": {
+      "fields": 724,
+      "accuracy_pct": 96.82,
+      "sent_to_review_pct": 4.83,
+      "wrong": 23,
+      "wrong_caught_pct": 82.61
+    },
+    "line.labour_hours": {
+      "fields": 724,
+      "accuracy_pct": 95.86,
+      "sent_to_review_pct": 4.14,
+      "wrong": 30,
+      "wrong_caught_pct": 80.0
+    },
+    "line.labour_rate": {
+      "fields": 724,
+      "accuracy_pct": 95.99,
+      "sent_to_review_pct": 4.01,
+      "wrong": 29,
+      "wrong_caught_pct": 72.41
+    },
+    "line.line_total": {
+      "fields": 724,
+      "accuracy_pct": 94.61,
+      "sent_to_review_pct": 17.96,
+      "wrong": 39,
+      "wrong_caught_pct": 84.62
+    }
+  },
+  "per_file_kind": {
+    "multi_pdf": {
+      "fields": 449,
+      "accuracy_pct": 98.0,
+      "sent_to_review_pct": 4.23,
+      "wrong": 9,
+      "wrong_caught_pct": 77.78
+    },
+    "clean_pdf": {
+      "fields": 3236,
+      "accuracy_pct": 98.95,
+      "sent_to_review_pct": 3.92,
+      "wrong": 34,
+      "wrong_caught_pct": 82.35
+    },
+    "phone_photo": {
+      "fields": 1690,
+      "accuracy_pct": 93.43,
+      "sent_to_review_pct": 10.0,
+      "wrong": 111,
+      "wrong_caught_pct": 81.08
+    },
+    "handwritten": {
+      "fields": 697,
+      "accuracy_pct": 89.38,
+      "sent_to_review_pct": 17.36,
+      "wrong": 74,
+      "wrong_caught_pct": 78.38
+    },
+    "skewed_scan": {
+      "fields": 1036,
+      "accuracy_pct": 96.53,
+      "sent_to_review_pct": 7.63,
+      "wrong": 36,
+      "wrong_caught_pct": 69.44
+    }
+  },
+  "vmrs_accuracy_pct": 87.85,
+  "vmrs_sources": {
+    "lookup": 238,
+    "none": 258,
+    "cache": 228
+  },
+  "split_correct_pct": 100.0,
+  "exact_duplicates_caught": "4/4",
+  "failed_files": 0,
+  "avg_wall_seconds_per_invoice": 1.073,
+  "avg_ai_seconds_per_invoice": 0.008,
+  "avg_cost_usd_per_invoice": 0.0158,
+  "total_cost_usd": 3.22,
+  "examples": {
+    "invoice_date": [
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "0024-01-30",
+        "2024-01-30"
+      ],
+      [
+        "pdf/inv_0014.pdf",
+        "clean_pdf",
+        "2824-09-13",
+        "2024-09-13"
+      ],
+      [
+        "pdf/inv_0027.pdf",
+        "clean_pdf",
+        "2036-04-17",
+        "2026-04-17"
+      ],
+      [
+        "pdf/inv_0070.pdf",
+        "clean_pdf",
+        "2064-01-09",
+        "2024-01-09"
+      ],
+      [
+        "photos/photo_0009.jpg",
+        "phone_photo",
+        "2022-09-21",
+        "2026-09-21"
+      ],
+      [
+        "photos/photo_0012.jpg",
+        "phone_photo",
+        "2024-04-16",
+        "2024-04-12"
+      ]
+    ],
+    "line_labour_rate": [
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "118.00",
+        "110.0"
+      ],
+      [
+        "multi/multi_0001.pdf",
+        "multi_pdf",
+        "510.00",
+        "110.0"
+      ],
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "118.30",
+        "118.0"
+      ],
+      [
+        "multi/multi_0003.pdf",
+        "multi_pdf",
+        "501.00",
+        "101.0"
+      ],
+      [
+        "multi/multi_0003.pdf",
+        "multi_pdf",
+        "109.00",
+        "101.0"
+      ],
+      [
+        "pdf/inv_0005.pdf",
+        "clean_pdf",
+        "124.10",
+        "124.0"
+      ]
+    ],
+    "line_parts_price": [
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "70.87",
+        "70.85"
+      ],
+      [
+        "pdf/inv_0023.pdf",
+        "clean_pdf",
+        "842.20",
+        "742.2"
+      ],
+      [
+        "pdf/inv_0026.pdf",
+        "clean_pdf",
+        "100.84",
+        "150.84"
+      ],
+      [
+        "pdf/inv_0033.pdf",
+        "clean_pdf",
+        "137.13",
+        "137.43"
+      ],
+      [
+        "pdf/inv_0077.pdf",
+        "clean_pdf",
+        "22.01",
+        "22.91"
+      ],
+      [
+        "photos/photo_0009.jpg",
+        "phone_photo",
+        "193.64",
+        "195.64"
+      ]
+    ],
+    "subtotal": [
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "4205.33",
+        "4205.36"
+      ],
+      [
+        "photos/photo_0005.jpg",
+        "phone_photo",
+        "3853.05",
+        "3853.06"
+      ],
+      [
+        "photos/photo_0022.jpg",
+        "phone_photo",
+        "2191.64",
+        "2161.64"
+      ],
+      [
+        "photos/photo_0030.jpg",
+        "phone_photo",
+        "842.09",
+        "842.79"
+      ],
+      [
+        "photos/photo_0041.jpg",
+        "phone_photo",
+        "1303.08",
+        "1309.08"
+      ],
+      [
+        "photos/photo_0044.jpg",
+        "phone_photo",
+        "336.35",
+        "332.35"
+      ]
+    ],
+    "line_labour_hours": [
+      [
+        "multi/multi_0002.pdf",
+        "multi_pdf",
+        "5.20",
+        "5.9"
+      ],
+      [
+        "pdf/inv_0082.pdf",
+        "clean_pdf",
+        "8.00",
+        "0.8"
+      ],
+      [
+        "photos/photo_0002.jpg",
+        "phone_photo",
+        "1.90",
+        "1.5"
+      ],
+      [
+        "photos/photo_0006.jpg",
+        "phone_photo",
+        "1.30",
+        "1.4"
+      ],
+      [
+        "photos/photo_0014.jpg",
+        "phone_photo",
+        "5.30",
+        "1.3"
+      ],
+      [
+        "photos/photo_0019.jpg",
+        "handwritten",
+        "6.60",
+        "1.6"
+      ]
+    ],
+    "vmrs": [
+      [
+        "multi/multi_0002.pdf",
+        "R&R w/pump & thermostat",
+        "042-001-003",
+        "042-001-002"
+      ],
+      [
+        "multi/multi_0003.pdf",
+        "BELT SQUEAL - NEW BELT",
+        null,
+        "045-001-007"
+      ],
+      [
+        "multi/multi_0003.pdf",
+        "R&R RAD - LEAKING AT TANK SEAM",
+        null,
+        "042-001-001"
+      ],
+      [
+        "pdf/inv_0001.pdf",
+        "Oil/filter kit DD15 w/ fuel filter",
+        "044-001-002",
+        "045-001-001"
+      ],
+      [
+        "pdf/inv_0002.pdf",
+        "Labor - Replace batteries, clean terminals",
+        null,
+        "031-002-001"
+      ],
+      [
+        "pdf/inv_0003.pdf",
+        "Replace radiator, hoses & clamps, coolant",
+        "042-001-004",
+        "042-001-001"
+      ]
+    ],
+    "tax": [
+      [
+        "pdf/inv_0001.pdf",
+        "clean_pdf",
+        "34.66",
+        "34.64"
+      ],
+      [
+        "pdf/inv_0078.pdf",
+        "clean_pdf",
+        "20.87",
+        "22.87"
+      ],
+      [
+        "photos/photo_0012.jpg",
+        "phone_photo",
+        "11.71",
+        "11.78"
+      ],
+      [
+        "photos/photo_0015.jpg",
+        "phone_photo",
+        "26.62",
+        "26.22"
+      ],
+      [
+        "photos/photo_0029.jpg",
+        "phone_photo",
+        "42.95",
+        "41.95"
+      ],
+      [
+        "photos/photo_0031.jpg",
+        "phone_photo",
+        "7.82",
+        "7.83"
+      ]
+    ],
+    "line_qty": [
+      [
+        "pdf/inv_0003.pdf",
+        "clean_pdf",
+        "1.70",
+        "1.0"
+      ],
+      [
+        "pdf/inv_0070.pdf",
+        "clean_pdf",
+        "6.00",
+        "1.0"
+      ],
+      [
+        "photos/photo_0004.jpg",
+        "phone_photo",
+        "2.00",
+        "1.0"
+      ],
+      [
+        "photos/photo_0016.jpg",
+        "phone_photo",
+        "10.00",
+        "1.0"
+      ],
+      [
+        "photos/photo_0018.jpg",
+        "handwritten",
+        "20.00",
+        "2.0"
+      ],
+      [
+        "photos/photo_0051.jpg",
+        "handwritten",
+        "4.90",
+        "4.0"
+      ]
+    ],
+    "line_line_total": [
+      [
+        "pdf/inv_0005.pdf",
+        "clean_pdf",
+        "477.64",
+        "467.64"
+      ],
+      [
+        "pdf/inv_0026.pdf",
+        "clean_pdf",
+        "0.00",
+        "6.0"
+      ],
+      [
+        "pdf/inv_0036.pdf",
+        "clean_pdf",
+        "9.00",
+        "6.0"
+      ],
+      [
+        "pdf/inv_0037.pdf",
+        "clean_pdf",
+        "1558.00",
+        "15.58"
+      ],
+      [
+        "pdf/inv_0067.pdf",
+        "clean_pdf",
+        "306.10",
+        "306.8"
+      ],
+      [
+        "pdf/inv_0075.pdf",
+        "clean_pdf",
+        "261.98",
+        "251.98"
+      ]
+    ],
+    "invoice_number": [
+      [
+        "pdf/inv_0018.pdf",
+        "clean_pdf",
+        "41163",
+        "45163"
+      ],
+      [
+        "photos/photo_0004.jpg",
+        "phone_photo",
+        "18543",
+        "18548"
+      ],
+      [
+        "photos/photo_0010.jpg",
+        "phone_photo",
+        "IV28892",
+        "INV28892"
+      ],
+      [
+        "photos/photo_0017.jpg",
+        "phone_photo",
+        "SI-42563",
+        "SI-42593"
+      ],
+      [
+        "photos/photo_0032.jpg",
+        "phone_photo",
+        "18515",
+        "18545"
+      ],
+      [
+        "photos/photo_0048.jpg",
+        "handwritten",
+        "28805",
+        "28305"
+      ]
+    ],
+    "total": [
+      [
+        "pdf/inv_0025.pdf",
+        "clean_pdf",
+        "601.20",
+        "621.2"
+      ],
+      [
+        "photos/photo_0001.jpg",
+        "phone_photo",
+        "92964.00",
+        "929.64"
+      ],
+      [
+        "photos/photo_0006.jpg",
+        "phone_photo",
+        "4317.04",
+        "4817.04"
+      ],
+      [
+        "photos/photo_0008.jpg",
+        "phone_photo",
+        "3803.60",
+        "3803.66"
+      ],
+      [
+        "photos/photo_0015.jpg",
+        "phone_photo",
+        "82341.00",
+        "823.41"
+      ],
+      [
+        "photos/photo_0023.jpg",
+        "phone_photo",
+        "1099.31",
+        "1096.31"
+      ]
+    ],
+    "vin": [
+      [
+        "pdf/inv_0037.pdf",
+        "clean_pdf",
+        "3AKL496Y7M4355150",
+        "3AKL492Y7M4355150"
+      ],
+      [
+        "pdf/inv_0043.pdf",
+        "clean_pdf",
+        "3AK59795MS848372",
+        "3AKU59795MS848372"
+      ],
+      [
+        "photos/photo_0022.jpg",
+        "phone_photo",
+        "1HSN04B21JP166792",
+        "1HSN04B21JP106792"
+      ],
+      [
+        "photos/photo_0029.jpg",
+        "phone_photo",
+        "1FUBK6K88LZ288200",
+        "1FUBK6K78LZ288200"
+      ],
+      [
+        "photos/photo_0036.jpg",
+        "handwritten",
+        "8XKY1F7U2JN380141",
+        "1XKY1F7U2JN380141"
+      ],
+      [
+        "photos/photo_0045.jpg",
+        "phone_photo",
+        "3AK97S5G4M5786849",
+        "3AK97S5G4M5786843"
+      ]
+    ],
+    "line_part_number": [
+      [
+        "pdf/inv_0048.pdf",
+        "clean_pdf",
+        "TR-71R225D",
+        "TR-11R225D"
+      ],
+      [
+        "pdf/inv_0072.pdf",
+        "clean_pdf",
+        "TB-7040",
+        "TB-7640"
+      ],
+      [
+        "pdf/inv_0075.pdf",
+        "clean_pdf",
+        "BS-4709Q",
+        "BS-4707Q"
+      ],
+      [
+        "photos/photo_0036.jpg",
+        "handwritten",
+        "H-9007",
+        "HL-9007"
+      ],
+      [
+        "photos/photo_0045.jpg",
+        "phone_photo",
+        "AL-4907",
+        "AL-4902"
+      ],
+      [
+        "photos/photo_0053.jpg",
+        "phone_photo",
+        "P-15W40",
+        "PM-15W40"
+      ]
+    ],
+    "shop_address": [
+      [
+        "pdf/inv_0050.pdf",
+        "clean_pdf",
+        "2630 oreland Ave, Memphis, TN 38118",
+        "2630 Moreland Ave, Memphis, TN 38118"
+      ],
+      [
+        "photos/photo_0018.jpg",
+        "handwritten",
+        "2630 Moreland Ave, Mephis, TN 38118",
+        "2630 Moreland Ave, Memphis, TN 38118"
+      ],
+      [
+        "photos/photo_0032.jpg",
+        "phone_photo",
+        "3300 N SHERIDAN RD, TULSA, OK 34115",
+        "3300 N SHERIDAN RD, TULSA, OK 74115"
+      ],
+      [
+        "photos/photo_0034.jpg",
+        "handwritten",
+        "3550 ALUM CREEK DR, COLUMBUS, OH 33207",
+        "3550 ALUM CREEK DR, COLUMBUS, OH 43207"
+      ],
+      [
+        "photos/photo_0048.jpg",
+        "handwritten",
+        "1920 Oute Loop, Louisville, KY 40219",
+        "1920 Outer Loop, Louisville, KY 40219"
+      ],
+      [
+        "scans/scan_0004.pdf",
+        "skewed_scan",
+        "1180 Fulton Indstrial Blvd SW, Atlanta, GA 30336",
+        "1180 Fulton Industrial Blvd SW, Atlanta, GA 30336"
+      ]
+    ],
+    "shop_name": [
+      [
+        "pdf/inv_0051.pdf",
+        "clean_pdf",
+        "BUCKYE HEAVY DUTY REPAIR",
+        "BUCKEYE HEAVY DUTY REPAIR"
+      ],
+      [
+        "photos/photo_0001.jpg",
+        "phone_photo",
+        "Heartland Mobile Truck Repai",
+        "Heartland Mobile Truck Repair"
+      ],
+      [
+        "photos/photo_0007.jpg",
+        "phone_photo",
+        "Tri-County Truck & Triler",
+        "Tri-County Truck & Trailer"
+      ],
+      [
+        "photos/photo_0011.jpg",
+        "handwritten",
+        "Tri-ounty Truck & Trailer",
+        "Tri-County Truck & Trailer"
+      ],
+      [
+        "photos/photo_0014.jpg",
+        "phone_photo",
+        "Lon Star Truck & Trailer Repair",
+        "Lone Star Truck & Trailer Repair"
+      ],
+      [
+        "photos/photo_0015.jpg",
+        "phone_photo",
+        "I-30 Diesel & Trailer",
+        "I-35 Diesel & Trailer"
+      ]
+    ],
+    "unit_number": [
+      [
+        "pdf/inv_0068.pdf",
+        "clean_pdf",
+        "2170",
+        "2100"
+      ],
+      [
+        "pdf/inv_0073.pdf",
+        "clean_pdf",
+        "2175",
+        "2185"
+      ],
+      [
+        "photos/photo_0016.jpg",
+        "phone_photo",
+        "2704",
+        "2604"
+      ],
+      [
+        "photos/photo_0024.jpg",
+        "handwritten",
+        "T-133",
+        "T-183"
+      ],
+      [
+        "photos/photo_0030.jpg",
+        "phone_photo",
+        "2302",
+        "2372"
+      ],
+      [
+        "photos/photo_0031.jpg",
+        "phone_photo",
+        "T-383",
+        "T-323"
+      ]
+    ],
+    "odometer": [
+      [
+        "photos/photo_0012.jpg",
+        "phone_photo",
+        "431346",
+        "433346"
+      ],
+      [
+        "photos/photo_0018.jpg",
+        "handwritten",
+        "415110",
+        "412110"
+      ],
+      [
+        "photos/photo_0020.jpg",
+        "phone_photo",
+        "251089",
+        "351089"
+      ],
+      [
+        "photos/photo_0033.jpg",
+        "phone_photo",
+        "518748",
+        "518798"
+      ],
+      [
+        "photos/photo_0042.jpg",
+        "phone_photo",
+        "353398",
+        "353298"
+      ],
+      [
+        "photos/photo_0051.jpg",
+        "handwritten",
+        "688128",
+        "388128"
+      ]
+    ]
+  }
+}
