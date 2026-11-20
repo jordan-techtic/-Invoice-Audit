@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, money, shortDate, type InvoiceSummary, type ReviewStatus } from "@/lib/api";
+import { api, dateTime, money, shortDate, type InvoiceSummary, type ReviewStatus } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useProgress } from "@/lib/progress";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -12,7 +12,7 @@ import StatusMark from "@/components/StatusMark";
 import { IconArrow } from "@/components/Icons";
 
 type Filter = "" | ReviewStatus;
-type SortKey = "shop" | "invoice_number" | "invoice_date" | "unit_number" | "total" | "fields_to_check";
+type SortKey = "created_at" | "shop" | "invoice_number" | "invoice_date" | "unit_number" | "total" | "fields_to_check";
 
 const TABS: { id: Filter; label: string }[] = [
   { id: "needs_review", label: "To check" },
@@ -20,6 +20,8 @@ const TABS: { id: Filter; label: string }[] = [
   { id: "reviewed", label: "Checked" },
   { id: "", label: "All" },
 ];
+
+const PAGE_SIZE = 10;
 
 export default function InvoicesPage() {
   return <NeedClient>{(c) => <List key={c.id} cid={c.id} />}</NeedClient>;
@@ -33,7 +35,9 @@ function List({ cid }: { cid: string }) {
   const [all, setAll] = useState<InvoiceSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [q, setQ] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "invoice_date", dir: -1 });
+  const [page, setPage] = useState(1);
+  // Default: newest created first (what the server sends). A column header overrides it.
+  const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: "created_at", dir: -1 });
   const { user } = useSession();
   const progress = useProgress();
   const isAdmin = user.role === "admin";
@@ -47,14 +51,15 @@ function List({ cid }: { cid: string }) {
   useEffect(() => {
     let live = true;
     api.invoices(cid)
-      .then((r) => { if (live) { setAll(r); setError(null); } })
+      .then((r) => { if (live) { setAll(r); setError(null); setPage(1); } })
       .catch((e) => { if (live) setError(e instanceof Error ? e.message : "Couldn't load invoices. Refresh the page."); });
     return () => { live = false; };
   }, [cid, reloadKey]);
 
   // A selection only ever covers what is on screen: changing the tab or the search clears it.
-  function changeFilter(f: Filter) { setFilter(f); setSelected(new Set()); }
-  function changeSearch(v: string) { setQ(v); setSelected(new Set()); }
+  function changeFilter(f: Filter) { setFilter(f); setSelected(new Set()); setPage(1); }
+  function changeSearch(v: string) { setQ(v); setSelected(new Set()); setPage(1); }
+  function goTo(n: number) { setPage(n); setSelected(new Set()); }
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { "": all?.length ?? 0, needs_review: 0, ready: 0, reviewed: 0 };
@@ -69,21 +74,25 @@ function List({ cid }: { cid: string }) {
       (!needle || [r.shop, r.invoice_number, r.unit_number].some((v) => v?.toLowerCase().includes(needle))));
     const val = (r: InvoiceSummary) => {
       const v = r[sort.key];
+      if (sort.key === "created_at") return Date.parse(String(v ?? "")) || 0;
       return sort.key === "total" ? Number(v ?? 0) : sort.key === "fields_to_check" ? Number(v ?? 0) : String(v ?? "").toLowerCase();
     };
     return [...list].sort((a, b) => (val(a) > val(b) ? 1 : val(a) < val(b) ? -1 : 0) * sort.dir);
   }, [all, filter, q, sort]);
 
+  const pages = Math.max(1, Math.ceil((rows?.length ?? 0) / PAGE_SIZE));
+  const current = Math.min(page, pages);
+  const pageRows = (rows ?? []).slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE);
   const total = (rows ?? []).reduce((s, r) => s + (Number(r.total) || 0), 0);
   const chosen = (rows ?? []).filter((r) => selected.has(r.id));
   const eligibleToCheck = chosen.filter((r) => r.review_status !== "reviewed").length;
-  const allOn = !!rows && rows.length > 0 && chosen.length === rows.length;
+  const allOn = pageRows.length > 0 && pageRows.every((r) => selected.has(r.id));
   useEffect(() => { if (selectAllRef.current) selectAllRef.current.indeterminate = chosen.length > 0 && !allOn; }, [chosen.length, allOn]);
 
   function toggle(id: string) {
     setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
-  function toggleAll() { setSelected(allOn ? new Set() : new Set((rows ?? []).map((r) => r.id))); }
+  function toggleAll() { setSelected(allOn ? new Set() : new Set(pageRows.map((r) => r.id))); }
   const plural = (n: number) => `${n} ${n === 1 ? "invoice" : "invoices"}`;
   async function doCheck() {
     const r = await api.bulkCheck(cid, chosen.map((x) => x.id));
@@ -114,7 +123,7 @@ function List({ cid }: { cid: string }) {
     const on = sort.key === key;
     return (
       <th scope="col" className={`th ${right ? "text-right" : ""}`} aria-sort={on ? (sort.dir === 1 ? "ascending" : "descending") : undefined}>
-        <button className="min-h-[40px] font-medium hover:text-ink" onClick={() => setSort({ key, dir: on ? (sort.dir === 1 ? -1 : 1) : key === "total" || key === "fields_to_check" ? -1 : 1 })}>
+        <button className="min-h-[40px] font-medium hover:text-ink" onClick={() => { setPage(1); setSort({ key, dir: on ? (sort.dir === 1 ? -1 : 1) : key === "total" || key === "fields_to_check" || key === "created_at" ? -1 : 1 }); }}>
           {label} {on ? (sort.dir === 1 ? "↑" : "↓") : ""}
         </button>
       </th>
@@ -185,11 +194,11 @@ function List({ cid }: { cid: string }) {
         <div className="mt-4 md:hidden">
           <label className="flex min-h-[44px] items-center gap-3 font-medium">
             <input type="checkbox" checked={allOn} onChange={toggleAll} className="h-5 w-5" style={{ accentColor: "var(--primary)" }}
-              aria-label={allOn ? `Clear selection of all ${rows.length} invoices` : `Select all ${rows.length} invoices in this list`} />
-            Select all {rows.length}
+              aria-label={allOn ? `Clear selection of the ${pageRows.length} invoices on this page` : `Select all ${pageRows.length} invoices on this page`} />
+            Select all {pageRows.length} on this page
           </label>
           <ul className="mt-2 flex flex-col gap-3">
-            {rows.map((r) => (
+            {pageRows.map((r) => (
               <li key={r.id} className={`rounded-lg border border-line p-4 ${selected.has(r.id) ? "bg-sunken" : "bg-surface"}`}>
                 <div className="flex items-start gap-3">
                   <label className="flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center">
@@ -229,9 +238,10 @@ function List({ cid }: { cid: string }) {
                 <th scope="col" className="th w-12">
                   <label className="flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center">
                     <input ref={selectAllRef} type="checkbox" checked={allOn} onChange={toggleAll} className="h-5 w-5" style={{ accentColor: "var(--primary)" }}
-                      aria-label={allOn ? `Clear selection of all ${rows.length} invoices` : `Select all ${rows.length} invoices in this list`} />
+                      aria-label={allOn ? `Clear selection of the ${pageRows.length} invoices on this page` : `Select all ${pageRows.length} invoices on this page`} />
                   </label>
                 </th>
+                {head("created_at", "Added")}
                 {head("shop", "Shop")}
                 {head("invoice_number", "Invoice number")}
                 {head("invoice_date", "Date")}
@@ -243,7 +253,7 @@ function List({ cid }: { cid: string }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
+              {pageRows.map((r) => (
                 <tr key={r.id} className={`tr hover:bg-bg ${selected.has(r.id) ? "bg-sunken" : ""}`} aria-selected={selected.has(r.id)}>
                   <td className="td w-12">
                     <label className="flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center">
@@ -251,6 +261,7 @@ function List({ cid }: { cid: string }) {
                         aria-label={`Select invoice ${r.invoice_number || ""} from ${r.shop || "unknown shop"}`} />
                     </label>
                   </td>
+                  <td className="td whitespace-nowrap num text-muted">{dateTime(r.created_at)}</td>
                   <td className="td font-medium">
                     <Link href={`/invoices/${r.id}`} className="text-primary underline-offset-4 hover:underline">{r.shop || "Shop not read"}</Link>
                   </td>
@@ -270,13 +281,34 @@ function List({ cid }: { cid: string }) {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-line-strong">
-                <td className="td font-bold" colSpan={5}>{rows.length} {rows.length === 1 ? "invoice" : "invoices"}</td>
+                <td className="td font-bold" colSpan={6}>{rows.length} {rows.length === 1 ? "invoice" : "invoices"}</td>
                 <td className="td num text-right font-bold">{money(total)}</td>
                 <td className="td" colSpan={3} />
               </tr>
             </tfoot>
           </table>
         </div>
+      )}
+
+      {rows && rows.length > PAGE_SIZE && (
+        <nav aria-label="Invoice pages" className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <p className="num text-muted" role="status">
+            Showing {(current - 1) * PAGE_SIZE + 1}–{Math.min(current * PAGE_SIZE, rows.length)} of {rows.length}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" className="btn-secondary btn-sm" disabled={current === 1} onClick={() => goTo(current - 1)}>Previous</button>
+            {Array.from({ length: pages }, (_, i) => i + 1)
+              .filter((n) => n === 1 || n === pages || Math.abs(n - current) <= 1)
+              .map((n, i, arr) => (
+                <span key={n} className="flex items-center gap-2">
+                  {i > 0 && n - arr[i - 1] > 1 && <span aria-hidden="true" className="text-muted">…</span>}
+                  <button type="button" onClick={() => goTo(n)} aria-label={`Page ${n}`} aria-current={n === current ? "page" : undefined}
+                    className={n === current ? "btn-primary btn-sm" : "btn-secondary btn-sm"}>{n}</button>
+                </span>
+              ))}
+            <button type="button" className="btn-secondary btn-sm" disabled={current === pages} onClick={() => goTo(current + 1)}>Next</button>
+          </div>
+        </nav>
       )}
 
       <ConfirmDialog open={dialog === "check"} title={`Mark ${plural(eligibleToCheck)} as checked?`}
