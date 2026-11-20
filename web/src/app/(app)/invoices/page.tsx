@@ -88,7 +88,8 @@ function List({ cid }: { cid: string }) {
   async function doCheck() {
     const r = await api.bulkCheck(cid, chosen.map((x) => x.id));
     setDialog(null); setSelected(new Set()); setReloadKey((k) => k + 1); void progress?.refresh();
-    const done = `${plural(r.checked)} marked as checked.${r.already_checked ? ` ${plural(r.already_checked)} ${r.already_checked === 1 ? "was" : "were"} already checked.` : ""}`;
+    const blockedNote = r.blocked?.length ? ` ${plural(r.blocked.length)} not marked: the maths or VIN check failed. Open ${r.blocked.length === 1 ? "it" : "each"} and correct the highlighted field, or confirm it as printed.` : "";
+    const done = `${plural(r.checked)} marked as checked.${r.already_checked ? ` ${plural(r.already_checked)} ${r.already_checked === 1 ? "was" : "were"} already checked.` : ""}${blockedNote}`;
     setNotice(done);
     setChecksDone(false);
     // When nothing is left to check, the audit checks start on their own.

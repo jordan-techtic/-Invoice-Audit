@@ -81,7 +81,8 @@ def test_deleting_invoices_does_not_change_a_report_that_already_exists(admin_cl
     pdf = pdf_text(admin_client.get(f"/clients/{cid}/reports/{rep['id']}/pdf").content)
     ids = list({f["invoice_id"] for f in flags})
     assert admin_client.post(f"/clients/{cid}/invoices/bulk-delete", json={"ids": ids}).json()["deleted"] == len(ids)
-    assert admin_client.get(f"/clients/{cid}/reports/{rep['id']}").json() == snap
+    assert {k: v for k, v in admin_client.get(f"/clients/{cid}/reports/{rep['id']}").json().items() if k != "out_of_date"} == \
+           {k: v for k, v in snap.items() if k != "out_of_date"}               # the content is frozen; out_of_date is computed from today's decisions
     assert pdf_text(admin_client.get(f"/clients/{cid}/reports/{rep['id']}/pdf").content) == pdf
 
 
@@ -95,3 +96,65 @@ def test_delete_is_admin_only_and_single_delete_works(admin_client, analyst_clie
     assert admin_client.delete(f"/clients/{cid}/invoices/{invs[0]['id']}").status_code == 404
     assert admin_client.delete(f"/clients/{world['b']}/invoices/{invs[1]['id']}").status_code == 404        # not under another client
     assert len(admin_client.get(f"/clients/{cid}/invoices").json()) == 1
+
+
+# ---- artifact W1: "checked" must not be set on an invoice whose numbers failed the maths/VIN checks unless someone edits or explicitly confirms
+def _upload_bad_total(c, cid, num="BAD-1"):
+    script(page_json(inv=num, total="999.00"))            # subtotal 580 + tax 0 != total 999
+    c.post(f"/clients/{cid}/uploads", files=[("files", (f"{num}.png", png_bytes(seed=uuid.uuid4().int % 10**7), "image/png"))])
+    return next(i for i in c.get(f"/clients/{cid}/invoices").json() if i["invoice_number"] == num)
+
+
+def test_bulk_check_refuses_an_invoice_whose_maths_failed_and_says_which_field(admin_client, world):
+    cid = world["a"]
+    inv = _upload_bad_total(admin_client, cid)
+    r = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": [inv["id"]]}).json()
+    assert r["checked"] == 0 and r["blocked"] == [{"id": inv["id"], "fields": ["total"], "reason": r["blocked"][0]["reason"]}]
+    assert "add up" in r["blocked"][0]["reason"] or "equal" in r["blocked"][0]["reason"]
+    assert next(i for i in admin_client.get(f"/clients/{cid}/invoices").json() if i["id"] == inv["id"])["review_status"] == "needs_review"
+
+
+def test_mark_checked_on_failed_maths_needs_an_explicit_confirmation(admin_client, world):
+    cid = world["a"]
+    inv = _upload_bad_total(admin_client, cid, "BAD-2")
+    no = admin_client.post(f"/clients/{cid}/invoices/{inv['id']}/mark-checked")
+    assert no.status_code == 409 and "total" in no.json()["detail"]
+    ok = admin_client.post(f"/clients/{cid}/invoices/{inv['id']}/mark-checked?confirm_as_printed=true")
+    assert ok.status_code == 200 and ok.json()["review_status"] == "reviewed"
+    rows = admin_client.get(f"/admin/audit-log?client_id={cid}&action=edit&limit=50").json()["rows"]
+    assert any((r.get("detail") or {}).get("confirmed_as_printed") for r in rows)
+
+
+def test_correcting_the_failed_field_lets_the_invoice_be_checked(admin_client, world):
+    cid = world["a"]
+    inv = _upload_bad_total(admin_client, cid, "BAD-3")
+    assert admin_client.patch(f"/clients/{cid}/invoices/{inv['id']}/fields", json={"field": "total", "value": "580.00"}).status_code == 200
+    r = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": [inv["id"]]}).json()
+    assert r["checked"] == 1 and "blocked" not in r
+
+
+# ---- artifact W4: correcting a number refreshes the flags that rest on it; an accepted flag whose inputs changed is marked, never silently kept
+def _flags(c, cid):
+    return c.get(f"/clients/{cid}/flags").json()["flags"]
+
+
+def test_correcting_a_field_refreshes_the_open_flags_on_that_invoice(admin_client, world):
+    cid = world["a"]
+    inv = _upload_bad_total(admin_client, cid, "EDIT-1")
+    admin_client.post(f"/clients/{cid}/run-flags")
+    assert [f["type"] for f in _flags(admin_client, cid) if f["invoice_number"] == "EDIT-1"] == ["math_error"]
+    assert admin_client.patch(f"/clients/{cid}/invoices/{inv['id']}/fields", json={"field": "total", "value": "580.00"}).status_code == 200
+    assert [f for f in _flags(admin_client, cid) if f["invoice_number"] == "EDIT-1"] == []       # no manual re-run needed
+
+
+def test_an_accepted_flag_whose_inputs_changed_is_marked_and_blocks_a_report(admin_client, world):
+    cid = world["a"]
+    inv = _upload_bad_total(admin_client, cid, "EDIT-2")
+    admin_client.post(f"/clients/{cid}/run-flags")
+    f = next(f for f in _flags(admin_client, cid) if f["invoice_number"] == "EDIT-2")
+    assert admin_client.post(f"/clients/{cid}/flags/{f['id']}/accept", json={"extraction_checked": True}).status_code == 200
+    admin_client.patch(f"/clients/{cid}/invoices/{inv['id']}/fields", json={"field": "total", "value": "580.00"})   # the number the flag rested on is corrected
+    now = next(x for x in _flags(admin_client, cid) if x["id"] == f["id"])
+    assert now["status"] == "accepted" and now["evidence"].get("no_longer_applies") is True
+    r = admin_client.post(f"/clients/{cid}/reports", json={})
+    assert r.status_code == 409 and "corrected after" in r.json()["detail"]

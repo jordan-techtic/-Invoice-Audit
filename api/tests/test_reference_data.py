@@ -479,3 +479,19 @@ def test_a_benchmark_for_one_vehicle_class_drives_the_labour_flags(admin_client,
         db.commit()
         flags = [f for f in db.scalars(select(Flag)) if f.type.value == "labour_over_benchmark"]
         assert len(flags) == 1 and flags[0].details["vehicle_class"] == "trailer" and flags[0].details["benchmark_hours"] == 0.5   # the tractor has no benchmark
+
+
+# ---- artifact X8: the model drops "T-" from a unit number on some invoices; the client's own fleet list says which truck it is
+def test_an_invoice_unit_that_lost_its_prefix_is_the_same_truck_as_the_fleet_unit(admin_client, world):
+    FakeProvider.reset()
+    cid = world["a"]
+    post_file(admin_client, f"/clients/{cid}/vehicles/import", b"unit,vehicle_class\nT-1026,tractor\nTR-5310,trailer\n")
+    with client_session(cid) as db:
+        add_invoice(db, "R1", date(2025, 6, 1), unit="T-1026", odo=100000, lines=[("Water pump", CODE, D("2.0"), D("100"), None, D("300"))], total=D("300"))
+        add_invoice(db, "R2", date(2025, 6, 20), unit="1026", odo=101000, lines=[("Water pump", CODE, D("2.0"), D("100"), None, D("450"))], total=D("450"))
+        db.commit()
+    with client_session(cid) as db:
+        run_flag_engine(db)
+        db.commit()
+        repeats = [f for f in db.scalars(select(Flag)) if f.type.value == "repeat_repair"]
+        assert len(repeats) == 1 and repeats[0].details["unit"] == "T1026"      # one truck, so the second pump job is a repeat

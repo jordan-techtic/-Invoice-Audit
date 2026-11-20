@@ -11,7 +11,7 @@ import { useProgress } from "@/lib/progress";
 
 export default function InvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  return <NeedClient>{(c) => <Detail cid={c.id} id={id} />}</NeedClient>;
+  return <NeedClient>{(c) => <Detail key={id} cid={c.id} id={id} />}</NeedClient>;
 }
 
 const HEADER: { field: string; label: string; wide?: boolean }[] = [
@@ -43,6 +43,7 @@ function Detail({ cid, id }: { cid: string; id: string }) {
   const [zoom, setZoom] = useState(false);
   const [marking, setMarking] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
+  const [canConfirm, setCanConfirm] = useState(false);   // the numbers failed a check: the person may confirm them exactly as printed
   const [edited, setEdited] = useState(false);
   const [recheck, setRecheck] = useState<{ busy?: boolean; text?: string; error?: string }>({});
   const pending = useRef<Set<Promise<unknown>>>(new Set());
@@ -87,18 +88,20 @@ function Detail({ cid, id }: { cid: string; id: string }) {
     } catch (e) { setRecheck({ error: e instanceof Error ? e.message : "Couldn't re-check this invoice. Try again." }); }
   }
 
-  async function markChecked() {
+  async function markChecked(confirmAsPrinted = false) {
     setMarking(true);
     setMarkError(null);
+    setCanConfirm(false);
     try {
       await Promise.allSettled([...pending.current]);
-      await api.markChecked(cid, id);
+      await api.markChecked(cid, id, confirmAsPrinted);
       await load();
-      const left = await api.invoices(cid, "needs_review").catch(() => []);
-      const next = left.find((r) => r.id !== id)?.id ?? null;
+      // A failed lookup is "we don't know", not "nothing is left": only start the checks when the list really came back empty.
+      const left = await api.invoices(cid, "needs_review").catch(() => null);
+      const next = left?.find((r) => r.id !== id)?.id ?? null;
       setNextId(next);
       refreshProgress?.();
-      if (!next && progress) {
+      if (left && !next && progress) {
         setAuto({ state: "running" });
         progress.runChecks().then(
           (flags) => setAuto({ state: "done", flags }),
@@ -106,7 +109,9 @@ function Detail({ cid, id }: { cid: string; id: string }) {
         );
       }
     } catch (e) {
-      setMarkError(e instanceof Error ? e.message : "Couldn't mark this invoice as checked. Try again.");
+      const msg = e instanceof Error ? e.message : "Couldn't mark this invoice as checked. Try again.";
+      setMarkError(msg);
+      setCanConfirm(msg.includes("exactly as printed"));
     } finally {
       setMarking(false);
     }
@@ -202,11 +207,12 @@ function Detail({ cid, id }: { cid: string; id: string }) {
               )}
             </div>
           ) : (
-            <button className="btn-primary btn-lg w-full" onClick={markChecked} disabled={checked || marking}>
+            <button className="btn-primary btn-lg w-full" onClick={() => markChecked()} disabled={checked || marking}>
               {checked ? "Checked" : marking ? "Marking…" : "Mark as checked"}
             </button>
           )}
           {markError && <p role="alert" className="mt-2 text-danger">{markError}</p>}
+          {canConfirm && <button className="btn-secondary mt-2 w-full" onClick={() => markChecked(true)} disabled={marking}>The numbers are exactly as printed: mark as checked</button>}
           {!checked && toCheck > 0 && <p className="mt-2 text-sm text-muted">Fix or confirm the fields marked Check, then mark this invoice as checked.</p>}
         </div>
 

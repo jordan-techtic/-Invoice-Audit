@@ -44,16 +44,32 @@ def labour_class_medians(invoices: list[InvoiceView], min_samples: int) -> dict[
     return {k: (_median(v), len(v)) for k, v in by.items() if len(v) >= min_samples}
 
 
+def _distinct(invoices: list[InvoiceView]) -> list[InvoiceView]:
+    """Drop later copies of the same invoice (same shop and number): a re-billed copy is not independent evidence of a price or a job time."""
+    seen: set[tuple] = set()
+    out = []
+    for inv in invoices:
+        ident = (inv.shop_key, inv.invoice_number) if inv.shop_key and inv.invoice_number else None
+        if ident is not None:
+            if ident in seen:
+                continue
+            seen.add(ident)
+        out.append(inv)
+    return out
+
+
 def parts_baselines(invoices: list[InvoiceView], min_samples: int) -> dict[str, Baseline]:
     prices: dict[str, list[Decimal]] = {}
     shops: dict[str, set] = {}
-    for inv in invoices:
+    sightings: dict[str, set] = {}
+    for inv in _distinct(invoices):
         for ln in inv.lines:
             k, p = norm_part(ln.part_number), unit_price(ln)
             if k and p is not None and p > 0:
                 prices.setdefault(k, []).append(p)
                 shops.setdefault(k, set()).add(inv.shop_key)
-    return {k: Baseline(_median(v), len(v), len(shops[k])) for k, v in prices.items() if len(v) >= min_samples}
+                sightings.setdefault(k, set()).add(inv.id)     # one invoice is one sighting, however many lines carry the part
+    return {k: Baseline(_median(v), len(sightings[k]), len(shops[k])) for k, v in prices.items() if len(sightings[k]) >= min_samples}
 
 
 def recompute(db: Session, invoices: list[InvoiceView], cfg: dict) -> tuple[dict[str, Decimal], dict[str, Baseline]]:

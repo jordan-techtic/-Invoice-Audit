@@ -72,6 +72,8 @@ export interface Snapshot {
 export interface ReportItem {
   id: string; version: number; generated_at: string; recoverable: number; flag_count: number;
   expires_at: string | null; revoked: boolean; expired: boolean; share_url: string | null;
+  /** A flag decision changed after this report was created. */
+  out_of_date?: boolean;
 }
 export interface FlagRun {
   id: string; status: "queued" | "running" | "done" | "failed"; started_at: string | null; finished_at: string | null;
@@ -164,8 +166,8 @@ export const api = {
   flag: (cid: string, fid: string) => request<FlagDetail>(`/clients/${cid}/flags/${fid}`),
   flagAction: (cid: string, fid: string, action: "accept" | "dismiss" | "edit" | "reopen", body: object = {}) =>
     request<FlagDetail>(`/clients/${cid}/flags/${fid}/${action}`, json("POST", body)),
-  bulkFlags: (cid: string, ids: string[], action: "accept" | "dismiss" | "reopen", extra: { reason?: DismissReason; note?: string } = {}) =>
-    request<{ changed: number; unchanged: number; skipped: number }>(`/clients/${cid}/flags/bulk`, json("POST", { ids, action, ...extra })),
+  bulkFlags: (cid: string, ids: string[], action: "accept" | "dismiss" | "reopen", extra: { reason?: DismissReason; note?: string; extraction_checked?: boolean } = {}) =>
+    request<{ changed: number; unchanged: number; skipped: number; needs_extraction_check?: string[] }>(`/clients/${cid}/flags/bulk`, json("POST", { ids, action, ...extra })),
   recheck: (cid: string, iid: string) => request<{ flags: number; added: number; removed: number }>(`/clients/${cid}/invoices/${iid}/recheck`, { method: "POST" }),
   client: (cid: string) => request<Client>(`/clients/${cid}`),
   reportSettings: (cid: string) => request<{ default_offer_text: string; company_name: string }>(`/clients/${cid}/report-settings`),
@@ -214,9 +216,10 @@ export const api = {
     const f = new FormData(); f.append("file", file);
     return request<{ imported: number }>(`/clients/${cid}/benchmarks/import`, { method: "POST", body: f });
   },
-  bulkCheck: (cid: string, ids: string[]) => request<{ checked: number; already_checked: number; skipped: number }>(`/clients/${cid}/invoices/bulk-check`, json("POST", { ids })),
+  bulkCheck: (cid: string, ids: string[]) => request<{ checked: number; already_checked: number; skipped: number; blocked?: { id: string; fields: string[]; reason: string }[] }>(`/clients/${cid}/invoices/bulk-check`, json("POST", { ids })),
   bulkDelete: (cid: string, ids: string[]) => request<{ deleted: number; skipped: number }>(`/clients/${cid}/invoices/bulk-delete`, json("POST", { ids })),
-  markChecked: (cid: string, id: string) => request<unknown>(`/clients/${cid}/invoices/${id}/mark-checked`, { method: "POST" }),
+  markChecked: (cid: string, id: string, confirmAsPrinted = false) =>
+    request<unknown>(`/clients/${cid}/invoices/${id}/mark-checked${confirmAsPrinted ? "?confirm_as_printed=true" : ""}`, { method: "POST" }),
 };
 
 /** Upload one file with real progress. Resolves with the per-file result from the API. */

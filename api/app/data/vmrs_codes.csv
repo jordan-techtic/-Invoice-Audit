@@ -1,4 +1,6 @@
 code,system,component,keywords
+000-001-001,General,Annual DOT inspection,dot annual inspection;annual dot inspection;annual inspection;dot inspection;dot annual insp;annual dot insp;fhwa annual inspection;fhwa annual insp;fhwa annual
+000-001-002,General,Trailer preventive maintenance,trailer pm inspection;trailer pm;pm trailer;trailer inspection
 001-001-001,Air conditioning heating and ventilating,A/C compressor,ac compressor;a/c compressor;air conditioning compressor
 001-001-002,Air conditioning heating and ventilating,A/C condenser,ac condenser;condenser
 001-001-003,Air conditioning heating and ventilating,A/C evaporator,evaporator
@@ -74,7 +76,7 @@ code,system,component,keywords
 026-001-003,Transmission manual,Transmission seal,trans seal;rear seal;output seal
 027-001-001,Transmission automatic,Automated transmission,automatic transmission;amt;allison
 027-001-002,Transmission automatic,Transmission service,trans service;transmission fluid;trans filter
-031-001-001,Charging system,Alternator,alternator;charging
+031-001-001,Charging system,Alternator,alternator;alt replacement;charging system repair
 031-001-002,Charging system,Alternator belt,alternator belt
 031-002-001,Charging system,Battery,battery;batteries
 031-002-002,Charging system,Battery cables,battery cable;ground strap;battery terminal
@@ -101,7 +103,7 @@ code,system,component,keywords
 044-001-002,Fuel system,Fuel filter,fuel filter;water separator
 044-001-003,Fuel system,Fuel pump,fuel pump;lift pump
 044-001-004,Fuel system,Fuel tank and straps,fuel tank;tank strap
-045-001-001,Power plant,Engine oil and filter service,oil change;pm service;lube oil filter;preventive maintenance;pm svc;pm service;chassis lube;lube oil;oil and filter;oil & filter;lube job;pm-a;pm-b
+045-001-001,Power plant,Engine oil and filter service,oil change;pm service;lube oil filter;preventive maintenance;pm svc;pm service;chassis lube;lube oil;oil and filter;oil & filter;lube job;pm-a;pm-b;pm a;pm a svc
 045-001-002,Power plant,Engine overhaul,overhaul;in-frame;out-of-frame;rebuild engine
 045-001-003,Power plant,Cylinder head,cylinder head;head gasket
 045-001-004,Power plant,Oil pan gasket,oil pan;pan gasket
@@ -109,6 +111,7 @@ code,system,component,keywords
 045-001-006,Power plant,Valve adjustment,overhead;valve adjust;valve lash
 045-001-007,Power plant,Serpentine belt and tensioner,serpentine;belt tensioner;idler pulley;drive belt
 045-001-008,Power plant,Engine diagnostics,diagnostic;diag;scan;check engine
+045-001-009,Power plant,PM-B service (extended preventive maintenance),pm b;pm b svc;pm b service;pm-b;preventive maintenance b
 071-001-001,Body,Liftgate,liftgate;lift gate;tailgate lift
 071-001-002,Body,Trailer door and hinges,trailer door;roll door;swing door
 071-001-003,Body,Reefer unit service,reefer;refrigeration unit;thermo king;carrier unit

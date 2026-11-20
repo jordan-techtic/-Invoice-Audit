@@ -19,8 +19,10 @@ def run(ctx: Context) -> list[FlagDraft]:
     window = max(0, int(ctx.config.get("duplicate_window_days", 0) or 0))
 
     def emit(dup: InvoiceView, first: InvoiceView, how: str, same: str) -> None:
-        flagged.add(dup.id)
         amt = dup.total if dup.total is not None else Decimal(0)
+        if amt <= 0:
+            return   # no amount to double-pay: a $0 flag is noise
+        flagged.add(dup.id)
         out.append(FlagDraft(
             type="duplicate", invoice_id=dup.id, line_id=None, related_invoice_id=first.id, impact=amt,
             dedupe_key=f"dup_invoice:{dup.id}",
@@ -30,6 +32,12 @@ def run(ctx: Context) -> list[FlagDraft]:
                              f"({same}). Possible double billing of {money(amt)}.").replace("Invoice  looks", "This invoice looks"),
         ))
 
+    def corroborated(a: InvoiceView, b: InvoiceView) -> bool:
+        """The same total, or the same unit on the same date."""
+        if a.total is not None and b.total is not None and a.total == b.total:
+            return True
+        return bool(a.unit_key and a.unit_key == b.unit_key and a.invoice_date and a.invoice_date == b.invoice_date)
+
     def group_by(keyfn) -> None:
         groups: dict[tuple, list[InvoiceView]] = {}
         for inv in invs:
@@ -37,12 +45,14 @@ def run(ctx: Context) -> list[FlagDraft]:
             if k:
                 groups.setdefault(k, []).append(inv)
         for members in groups.values():
-            first = members[0]
-            for dup in members[1:]:
+            for k, dup in enumerate(members[1:], start=1):
                 if dup.id in flagged:
                     continue
                 how = keyfn.__name__
-                emit(dup, first, how, "same shop and invoice number" if how == "same_number" else "same shop, unit, date and total")
+                # a shop's invoice number alone is not enough (numbering restarts, and a misread digit lands on a used number): something else must agree
+                first = next((m for m in members[:k] if how != "same_number" or corroborated(m, dup)), None)
+                if first is not None:
+                    emit(dup, first, how, "same shop and invoice number" if how == "same_number" else "same shop, unit, date and total")
 
     def within_window() -> None:
         """Same shop, unit and total, dated within N days of each other: a re-submission with a new number and/or date."""

@@ -47,6 +47,16 @@ async def _isolation_error(request: Request, exc: Exception):
     return JSONResponse({"detail": "This request touched data outside the selected client and was blocked."}, status_code=500)
 
 
+@app.middleware("http")
+async def keep_public_reports_private(request, call_next):
+    """The public report link is a secret address: ask search engines not to index it and browsers not to send it on as a referrer."""
+    response = await call_next(request)
+    if request.url.path.startswith("/public/"):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 @app.get("/health")
 def health():
     return {"ok": True}

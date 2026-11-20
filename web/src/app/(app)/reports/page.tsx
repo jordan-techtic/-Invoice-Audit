@@ -138,6 +138,7 @@ function Reports({ cid }: { cid: string }) {
               <dt className="text-muted">Created</dt><dd>{dateTime(latest.generated_at)}</dd>
               <dt className="text-muted">Link expires</dt><dd>{latest.expires_at ? dateTime(latest.expires_at) : "No expiry"}</dd>
               <dt className="text-muted">Status</dt><dd className={`font-medium ${live(latest) ? "text-confirmed" : "text-dismissed"}`}>{stateOf(latest)}</dd>
+              {latest.out_of_date && <><dt className="text-muted">Decisions</dt><dd className="font-medium text-danger">Out of date: a flag decision changed after this report was created. Create a new version.</dd></>}
             </dl>
           </div>
           <div className="mt-5">{actions(latest, true)}</div>

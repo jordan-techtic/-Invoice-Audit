@@ -27,6 +27,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
   const [d, setD] = useState<FlagDetail | null>(null);
   const [ids, setIds] = useState<string[]>(readIds);
   const [error, setError] = useState<string | null>(null);
+  const [needsImageCheck, setNeedsImageCheck] = useState(false);   // the flag rests on numbers that were hard to read
   const [panel, setPanel] = useState<null | "dismiss" | "edit">(null);
   const [busy, setBusy] = useState(false);
   const [page, setPage] = useState(0);
@@ -83,14 +84,19 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
         if (left === 0 && !blocked) { router.push("/reports"); return; }
         advance();
       }
-    } catch (e) { setError(e instanceof Error ? e.message : "That didn't save. Try again."); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "That didn't save. Try again.";
+      setError(msg);
+      setNeedsImageCheck(action === "accept" && msg.includes("hard to read"));
+    }
     finally { setBusy(false); }
   }, [cid, fid, advance, refreshProgress, blocked, router]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement;
-      if (["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
+      // UI2: never act on a held key, or on a key pressed while a button or link has focus (a flag could be accepted unseen)
+      if (e.repeat || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(t.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k === "escape") setPanel(null);
       else if (!d) return;
@@ -160,6 +166,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
           )}
 
           {error && <p role="alert" className="mt-4 text-danger">{error}</p>}
+          {needsImageCheck && <button className="btn-secondary btn-sm mt-2" disabled={busy} onClick={() => act("accept", { extraction_checked: true })}>I checked the invoice image: the numbers are right, accept</button>}
 
           {open ? (
             <div className="mt-6 grid gap-3">

@@ -41,19 +41,22 @@ See [docs/deployment-pm2.md](docs/deployment-pm2.md): edit `ecosystem.config.jso
 the frontend proxies `/api/*` to `API_URL` (default http://127.0.0.1:8000), so either can run on its own machine.
 
 ## How to run an audit
-1. **Create the client.** Admin: *Clients -> Add client*. Open *Settings* to check the warranty rules (defaults for ~16
-   components) and, optionally, import licensed labour benchmarks (CSV: `vmrs_code, benchmark_hours`).
+1. **Create the client.** Admin: *Clients -> Add client*. Open *Settings* and load the client's reference documents: the
+   thresholds file, warranty rules, vehicle list and job benchmarks (see `docs/client-settings.md`). A new client has the default
+   thresholds and no warranty rules until you import them.
 2. **Upload invoices.** *Upload*: drop PDFs, JPG, PNG or HEIC files (25 MB max each). Or email them to the client's inbox
    address (webhook `POST /inbound/email/<token>`; test with `scripts/send_test_email.py`). Exact duplicates are skipped and
    listed. Wait until no file says Queued or Reading.
 3. **Fix what the AI was unsure of.** *Review -> Invoices*: open invoices marked *Needs review*, compare the fields marked
-   "Check" with the image, edit them, then *Mark as checked*. After editing, *Re-check this invoice* refreshes its flags.
+   "Check" with the image, edit them, then *Mark as checked*. An invoice whose maths or VIN check failed cannot be marked checked
+   until the field is corrected (or confirmed as printed). Editing a number refreshes the flags that rest on it.
 4. **Run checks.** *Review -> Flags*: *Run checks*. Reference data is recomputed from the client's invoices, the six rules
    run, and each flag gets a plain-English reason and a dollar impact.
 5. **Review every flag.** Open a flag; *Accept flag* (A), *Dismiss flag* (D, pick a reason) or *Edit flag* (E: change the
    amount or reason, add a note). J and K move between flags. Flags marked "hard to read" depend on numbers the AI was unsure
    of: check the image first.
-6. **Create the report.** When no flag is open, *Create report* (Reports). It is a frozen copy of the accepted flags. Choose
+6. **Create the report.** When no flag is open, *Create report* (Reports). It is a frozen copy of the accepted flags and shows
+   *out of date* if a decision changes afterwards; a new version turns the older public link off. Choose
    the link expiry and edit the service-offer text. Then *Open dashboard*, *Download PDF*, or *Copy link* for the client.
 7. **Finish.** Admin: *Settings -> Audit and data -> Mark audit complete*. Raw files are deleted automatically after the
    retention period (90 days by default). *Audit log* (rail foot, admins) shows who did what.
@@ -70,8 +73,9 @@ the frontend proxies `/api/*` to `API_URL` (default http://127.0.0.1:8000), so e
 ## Configuration
 `.env` (see `.env.example`): `OPENAI_API_KEY`, `OPENAI_MODEL` (default gpt-4o), `AI_PROVIDER`, `CONFIDENCE_THRESHOLD` (0.80),
 `EXTRACTION_RETRIES` (1), `PRICE_INPUT_PER_MTOK` / `PRICE_OUTPUT_PER_MTOK` (cost estimates; check current pricing),
-`RAW_FILE_RETENTION_DAYS` (90). Per-client thresholds (labour %, repeat days/miles, parts %, severity bands, retention) are
-editable via `PATCH /clients/{id}` settings. Report branding and the default offer text: `api/app/report_settings.json`.
+`RAW_FILE_RETENTION_DAYS` (90). Per-client thresholds and reference data (labour %, repeat days/miles/condition, parts %, duplicate window,
+maths tolerance, severity bands, warranty rules, vehicles, benchmarks) are edited under *Settings* or via `PATCH /clients/{id}`; every setting is
+described in `docs/client-settings.md`. Report branding and the default offer text: `api/app/report_settings.json`.
 Prompts: `api/app/prompts/*.txt`. Run `make config-check` to list what is not set for production.
 Production needs TLS in front of both services (any reverse proxy, e.g. Caddy or nginx); there is no deployment config in the repo.
 

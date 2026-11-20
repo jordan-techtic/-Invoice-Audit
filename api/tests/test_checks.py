@@ -78,3 +78,36 @@ def test_short_number_in_the_vin_field_is_moved_to_the_odometer_and_flagged():
     assert r.header["odometer"].failed_check and "probably the odometer" in r.header["odometer"].note
     r = run(H(vin="397578", odometer="410000"), L())             # odometer already read: do not overwrite it
     assert r.header["odometer"].value == 410000 and r.header["vin"].failed_check
+
+
+# ---- artifact X1/W1: shops print Parts / Labor / Tax / TOTAL DUE and no Subtotal row, so the model may return one of those rows as the subtotal
+def test_a_footer_row_read_as_the_subtotal_does_not_fail_an_invoice_whose_lines_plus_tax_equal_the_total():
+    lines = L(total="372.87", parts_price="372.87") + L(total="388.50", parts_price=None, qty=None, labour_hours=3.5, labour_rate="111.00")
+    r = run(H(subtotal="372.87", tax="31.69", total="793.06"), lines)     # 37911: the stored subtotal is the Parts row
+    assert r.checks_failed == []
+    assert not r.header["subtotal"].failed_check and not r.header["total"].failed_check
+    assert r.header["subtotal"].value == Decimal("372.87")                  # the check never changes a value
+
+
+def test_a_total_due_row_read_as_the_subtotal_does_not_fail_the_invoice():
+    lines = L(total="49.74", parts_price="49.74") + L(total="43.00", parts_price="43.00")
+    r = run(H(subtotal="96.83", tax="4.09", total="96.83"), lines)         # PE-56950: subtotal = TOTAL DUE
+    assert r.checks_failed == [] and not r.header["total"].failed_check
+
+
+def test_a_real_total_error_is_still_caught_when_there_is_a_subtotal():
+    lines = L(total="100.00") + L(total="100.00")
+    r = run(H(subtotal="200.00", tax="10.00", total="300.00"), lines)       # 200 + 10 != 300 and lines + tax != 300
+    assert "total_vs_subtotal_tax" in r.checks_failed
+
+
+# ---- artifact X4 root cause: the model copies the HOURS into the quantity of a labour-only line
+def test_a_quantity_that_just_repeats_the_hours_is_sent_to_review_without_changing_it():
+    r = run(H(subtotal="392.00", total="392.00"), L(total="392.00", qty=2.8, parts_price=None, labour_hours=2.8, labour_rate="140.00"))
+    q = r.lines[0]["qty"]
+    assert q.value == Decimal("2.8") and q.failed_check and "hours" in q.note       # the value stays; a person is asked to look
+
+
+def test_a_real_quantity_on_a_parts_and_labour_line_is_left_alone():
+    r = run(H(subtotal="300.00", total="300.00"), L(total="300.00", qty=2, parts_price="50.00", labour_hours=2, labour_rate="100.00"))
+    assert not r.lines[0]["qty"].failed_check

@@ -27,8 +27,8 @@ from ..models import (
     Vehicle,
 )
 from ..security import encrypt_bytes
-from . import vmrs
-from .checks import FieldResult, normalise_and_check
+from . import crosschecks, normalize, vmrs
+from .checks import FieldResult, _lower, normalise_and_check
 from .extraction import ExtractionError, get_provider
 from .extraction.base import ExtractionProvider
 from .extraction.schema import PageExtraction
@@ -156,15 +156,21 @@ def _store_invoice(db, up: Upload, merged, result, threshold: float, provider) -
             shop = Shop(name=h["shop_name"].value, normalized_name=norm)
             db.add(shop)
             db.flush()
+    # Fields with no arithmetic of their own (unit, odometer, invoice number) are compared with what the client already has.
+    for field, note in crosschecks.run(db, shop_id=shop.id if shop else None, header=h):
+        _lower(h[field], 0.5, note)
+
+    # A VIN becomes a truck's identity only when it passes its check digit: one wrong character must not create or overwrite a VIN.
+    good_vin = h["vin"].value if h["vin"].value and normalize.vin_check_digit_ok(h["vin"].value) else None
     vehicle = None
     if h["unit_number"].value:
         vehicle = db.scalar(select(Vehicle).where(Vehicle.unit_number == h["unit_number"].value))
         if not vehicle:
-            vehicle = Vehicle(unit_number=h["unit_number"].value, vin=h["vin"].value if h["vin"].value and len(h["vin"].value) == 17 else None)
+            vehicle = Vehicle(unit_number=h["unit_number"].value, vin=good_vin)
             db.add(vehicle)
             db.flush()
-        elif not vehicle.vin and h["vin"].value and len(h["vin"].value) == 17:
-            vehicle.vin = h["vin"].value
+        elif not vehicle.vin and good_vin:
+            vehicle.vin = good_vin
 
     inv = Invoice(
         shop_id=shop.id if shop else None,

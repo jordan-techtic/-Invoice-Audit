@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session
 
 from .. import audit, storage
 from ..deps import client_db
-from ..models import FieldConfidence, Flag, Invoice, InvoiceLine, ReviewStatus, Shop, Upload, UploadStatus, User, Vehicle
+from ..models import FieldConfidence, Flag, Invoice, InvoiceLine, ReviewStatus, Shop, Upload, UploadStatus, User, Vehicle, VmrsCache
+from ..flags.engine import refresh_after_edit
 from ..services import normalize as N
+from ..services.checks import FAILED_CHECK_PHRASES
 from ..services.pipeline import page_key
 from .flags import admin_only
 
@@ -117,6 +119,9 @@ class FieldEdit(BaseModel):
     line_id: uuid.UUID | None = None
 
 
+FIELD_LIMITS = {"unit_number": 50, "invoice_number": 80}   # the database column sizes; a longer value used to fail with a 500
+
+
 def _coerce(field: str, value: str | None):
     if value is None or value.strip() == "":
         return None
@@ -134,6 +139,8 @@ def _coerce(field: str, value: str | None):
         v = N.clean_text(value, 1000)
     if v is None:
         raise HTTPException(422, f"'{value}' isn't a valid value for {field.replace('_', ' ')}. Enter it the way it appears, for example 1,250.00 or 03/14/2026.")
+    if isinstance(v, str) and field in FIELD_LIMITS and len(v) > FIELD_LIMITS[field]:
+        raise HTTPException(422, f"That {field.replace('_', ' ')} is too long (the limit is {FIELD_LIMITS[field]} characters). Enter just the number or code as printed.")
     return v
 
 
@@ -161,6 +168,13 @@ def edit_field(invoice_id: uuid.UUID, client_id: uuid.UUID, body: FieldEdit, req
     setattr(row, attr, value)
     if body.field == "vmrs_code":
         row.vmrs_source, row.vmrs_confidence = "analyst", 1.0
+        if value is not None and row.description:   # the same description on the next invoice gets the analyst's answer, not the guess again
+            key = N.normalize_description(row.description)
+            cached = db.scalar(select(VmrsCache).where(VmrsCache.norm_description == key))
+            if cached is None:
+                db.add(VmrsCache(norm_description=key, vmrs_code=value, confidence=1.0, source="analyst"))
+            else:
+                cached.vmrs_code, cached.confidence, cached.source = value, 1.0, "analyst"
     if body.field == "shop_name" and value:
         norm = N.normalize_shop_name(value)
         shop = db.scalar(select(Shop).where(Shop.normalized_name == norm)) or Shop(name=value, normalized_name=norm)
@@ -179,6 +193,7 @@ def edit_field(invoice_id: uuid.UUID, client_id: uuid.UUID, body: FieldEdit, req
     fc.score, fc.needs_review, fc.note = 1.0, False, None
     fc.corrected_by, fc.corrected_at = db.info["user_id"], datetime.now(timezone.utc)
     db.commit()
+    refresh_after_edit(db, inv.id)   # the flags on this invoice (and ones that point at it) rest on the number that just changed
     audit.record(db, action="edit", object_type="invoice", object_id=inv.id, detail={"field": body.field, "line": bool(body.line_id)}, request=request)
     return {"ok": True}
 
@@ -200,15 +215,29 @@ def _refresh_uploads(db: Session, upload_ids: set) -> None:
             up.status = UploadStatus.done
 
 
+def _failed_checks(db: Session, inv: Invoice) -> list[tuple[str, str]]:
+    """(field, note) for every field on the invoice whose arithmetic or VIN check failed and that nobody has corrected."""
+    ids = [inv.id] + [ln.id for ln in inv.lines]
+    rows = db.scalars(select(FieldConfidence).where(FieldConfidence.record_id.in_(ids), FieldConfidence.needs_review.is_(True)))
+    return [(fc.field, fc.note) for fc in rows if fc.note and any(p in fc.note for p in FAILED_CHECK_PHRASES)]
+
+
 @router.post("/{invoice_id}/mark-checked")
-def mark_checked(invoice_id: uuid.UUID, client_id: uuid.UUID, request: Request, db: Session = Depends(client_db)):
+def mark_checked(invoice_id: uuid.UUID, client_id: uuid.UUID, request: Request, confirm_as_printed: bool = False, db: Session = Depends(client_db)):
     inv = db.get(Invoice, invoice_id)
     if inv is None:
         raise HTTPException(404, "Invoice not found.")
+    failed = _failed_checks(db, inv)
+    if failed and not confirm_as_printed:
+        fields = ", ".join(sorted({f.replace("_", " ") for f, _ in failed}))
+        raise HTTPException(409, f"The numbers on this invoice don't add up ({fields}). Correct the highlighted field, or confirm it is exactly as printed.")
     _check(db, inv, db.info["user_id"], datetime.now(timezone.utc))
     _refresh_uploads(db, {inv.source_upload_id} if inv.source_upload_id else set())
     db.commit()
-    audit.record(db, action="edit", object_type="invoice", object_id=inv.id, detail={"op": "mark_checked"}, request=request)
+    detail = {"op": "mark_checked"}
+    if failed:
+        detail.update(confirmed_as_printed=True, fields=sorted({f for f, _ in failed}))
+    audit.record(db, action="edit", object_type="invoice", object_id=inv.id, detail=detail, request=request)
     return {"ok": True, "review_status": inv.review_status.value}
 
 
@@ -226,13 +255,23 @@ def bulk_check(client_id: uuid.UUID, body: BulkIds, request: Request, db: Sessio
     """Mark many invoices as checked at once. The analyst is confirming every highlighted field as read; the audit log records the count."""
     invs = _owned(db, body.ids)
     now, uid = datetime.now(timezone.utc), db.info["user_id"]
-    todo = [i for i in invs if i.review_status != ReviewStatus.reviewed]
+    pending = [i for i in invs if i.review_status != ReviewStatus.reviewed]
+    todo, blocked = [], []
+    for inv in pending:
+        failed = _failed_checks(db, inv)
+        if failed:   # the numbers failed a check and nobody corrected them: they must be fixed or confirmed one invoice at a time
+            blocked.append({"id": str(inv.id), "fields": sorted({f for f, _ in failed}), "reason": failed[0][1].removeprefix("Check this: ")})
+        else:
+            todo.append(inv)
     for inv in todo:
         _check(db, inv, uid, now)
     _refresh_uploads(db, {i.source_upload_id for i in todo if i.source_upload_id})
     db.commit()
-    audit.record(db, action="edit", object_type="invoice", detail={"op": "bulk_mark_checked", "count": len(todo), "requested": len(body.ids)}, request=request)
-    return {"checked": len(todo), "already_checked": len(invs) - len(todo), "skipped": len(set(body.ids)) - len(invs)}
+    audit.record(db, action="edit", object_type="invoice", detail={"op": "bulk_mark_checked", "count": len(todo), "requested": len(body.ids), "blocked": len(blocked)}, request=request)
+    out = {"checked": len(todo), "already_checked": len(invs) - len(pending), "skipped": len(set(body.ids)) - len(invs)}
+    if blocked:
+        out["blocked"] = blocked
+    return out
 
 
 def _delete_invoices(db: Session, invs: list[Invoice]) -> int:

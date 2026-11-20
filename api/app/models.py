@@ -96,6 +96,7 @@ DEFAULT_CLIENT_SETTINGS: dict = {
     "repeat_exclude_codes": [  # routine, recurring work: not a "repeat repair"
         "045-001-001", "045-001-008", "044-001-002", "041-001-001", "043-001-001",
         "001-001-005", "017-001-004", "017-001-005", "071-001-003", "042-001-006",
+        "000-001-001", "000-001-002", "045-001-009",   # annual DOT inspection, trailer preventive maintenance, PM-B service
     ],
     "parts_outlier_pct": 25,
     "parts_single_shop_multiple": 1.5,
