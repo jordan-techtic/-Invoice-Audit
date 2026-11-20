@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface Props {
   open: boolean; title: string; body: string; confirmWord?: string; actionLabel: string; danger?: boolean;
@@ -9,6 +9,7 @@ interface Props {
 
 export default function ConfirmDialog({ open, title, body, confirmWord, actionLabel, danger, onConfirm, onClose }: Props) {
   const ref = useRef<HTMLDialogElement>(null);
+  const inputId = useId();  // several of these can be on one page, so the label must point at this dialog's own box
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,8 +38,8 @@ export default function ConfirmDialog({ open, title, body, confirmWord, actionLa
         <p className="mt-2">{body}</p>
         {confirmWord && (
           <>
-            <label htmlFor="confirm-word" className="mb-1 mt-4 block text-sm font-medium">Type {confirmWord} to confirm</label>
-            <input id="confirm-word" className="field" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+            <label htmlFor={inputId} className="mb-1 mt-4 block text-sm font-medium">Type {confirmWord} to confirm</label>
+            <input id={inputId} className="field" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
           </>
         )}
         {error && <p role="alert" className="mt-3 text-danger">{error}</p>}

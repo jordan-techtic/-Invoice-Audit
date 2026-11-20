@@ -12,13 +12,14 @@ from ..deps import client_db, current_user, get_session, require_admin
 from ..models import DEFAULT_CLIENT_SETTINGS, Client, Role, User, UserClient, WarrantyRule
 from ..schemas import ClientCreate, ClientOut, ClientUpdate
 from ..security import new_token
-from ..services.defaults import ensure_default_warranty_rules
+from ..services.reference_import import clean_settings
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
 
 def client_out(c: Client) -> dict:
-    return {"id": str(c.id), "name": c.name, "slug": c.slug, "inbound_email_token": c.inbound_email_token, "settings": c.settings,
+    return {"id": str(c.id), "name": c.name, "slug": c.slug, "inbound_email_token": c.inbound_email_token,
+            "settings": {**DEFAULT_CLIENT_SETTINGS, **(c.settings or {})},  # a client saved before a setting existed still shows its value
             "service_offer_text": c.service_offer_text, "audit_completed_at": c.audit_completed_at, "created_at": c.created_at,
             "raw_files_deleted_at": c.raw_files_deleted_at,
             "raw_retention_days": int((c.settings or {}).get("raw_retention_days", get_settings().raw_file_retention_days))}
@@ -50,7 +51,6 @@ def create_client(
     db.add(client)
     db.flush()
     db.info["client_id"] = client.id
-    ensure_default_warranty_rules(db, client.id)
     db.commit()
     audit.record(db, action="create", object_type="client", object_id=client.id, user_id=user.id, client_id=client.id, request=request)
     return client_out(client)
@@ -72,7 +72,10 @@ def update_client(client_id: uuid.UUID, body: ClientUpdate, request: Request, _:
         unknown = set(body.settings) - set(DEFAULT_CLIENT_SETTINGS) - {"raw_retention_days"}
         if unknown:
             raise HTTPException(422, f"Unknown setting: {', '.join(sorted(unknown))}. Remove it and try again.")
-        client.settings = {**DEFAULT_CLIENT_SETTINGS, **client.settings, **body.settings}
+        clean, problems = clean_settings(body.settings)
+        if problems:
+            raise HTTPException(422, " ".join(problems))
+        client.settings = {**DEFAULT_CLIENT_SETTINGS, **client.settings, **clean}
         changed.append("settings")
     if body.service_offer_text is not None:
         client.service_offer_text = body.service_offer_text

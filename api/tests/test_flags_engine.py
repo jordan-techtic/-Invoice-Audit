@@ -175,8 +175,8 @@ def test_flags_never_cross_clients(admin_client, analyst_client, world):
 
 def test_warranty_rules_admin_can_edit_analyst_cannot(admin_client, analyst_client, world):
     cid = world["a"]
-    fresh = admin_client.post("/clients", json={"name": "Defaults Test Fleet"}).json()["id"]
-    assert len(admin_client.get(f"/clients/{fresh}/warranty-rules").json()) >= 15   # new clients get the default rules
+    fresh = admin_client.post("/clients", json={"name": "Empty Test Fleet"}).json()["id"]
+    assert admin_client.get(f"/clients/{fresh}/warranty-rules").json() == []   # new clients start empty: terms come from an import, not from us
     rules = admin_client.get(f"/clients/{cid}/warranty-rules").json()
     assert any(r["component"] == "Alternator A" and r["months"] == 12 and r["miles"] == 100000 for r in rules)
     alt = next(r for r in rules if r["component"].startswith("Alternator"))

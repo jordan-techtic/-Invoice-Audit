@@ -1,7 +1,14 @@
 export type Role = "admin" | "analyst" | string;
 export interface User { id: string; email: string; name: string; role: Role }
+/** The thresholds the audit checks use, as stored per client. */
+export interface Thresholds {
+  labour_over_benchmark_pct: number; labour_min_samples: number;
+  repeat_repair_days: number; repeat_repair_miles: number; repeat_condition: "and" | "or";
+  parts_outlier_pct: number; parts_single_shop_multiple: number; parts_min_samples: number;
+  math_tolerance: number; duplicate_window_days: number;
+}
 export interface Client {
-  id: string; name: string; slug: string;
+  id: string; name: string; slug: string; settings?: Thresholds;
   raw_retention_days?: number; raw_files_deleted_at?: string | null; audit_completed_at?: string | null;
 }
 export type UploadStatus = "queued" | "reading" | "needs_review" | "done" | "failed" | "duplicate";
@@ -70,14 +77,35 @@ export interface FlagRun {
   id: string; status: "queued" | "running" | "done" | "failed"; started_at: string | null; finished_at: string | null;
   summary: { flags: number; by_type: Record<string, number>; notes: string[] } | null; error: string | null;
 }
-export interface WarrantyRule { id: string; vmrs_code: string; component: string; months: number; miles: number | null }
-export interface Benchmark { vmrs_code: string; component: string; hours: number; source: string; sample_count: number | null }
+export type Covers = "parts" | "parts+labour";
+export interface WarrantyRule { id: string; vmrs_code: string; component: string; months: number; miles: number | null; covers: Covers }
+export interface Vehicle { id: string; unit_number: string; vin: string | null; vehicle_class: string | null; year: number | null; make: string | null; model: string | null; start_odometer: number | null }
+/** One problem found in an imported file. row 1 is the header; 0 means the file as a whole. */
+export interface ImportProblem { row: number; field: string | null; message: string }
+export interface WarrantyImportResult {
+  rows: number; added: number; updated: number; mode: "merge" | "replace"; total_rules: number;
+  merged: { row: number; component: string; into: string; reason: string }[];
+  skipped: { row: number; component: string; reason: string }[];
+}
+export interface VehicleImportResult { rows: number; added: number; updated: number; total_vehicles: number; warnings: { row: number; message: string }[] }
+export interface ThresholdsImportResult { settings: Partial<Thresholds>; applied: { file_key: string; setting: string; value: number }[]; ignored: string[] }
+export interface Benchmark { id: string; vmrs_code: string; component: string; vehicle_class: string | null; hours: number; source: string; sample_count: number | null }
+export interface VehicleInput { unit_number: string; vehicle_class: string; vin?: string | null; year?: number | null; make?: string | null; model?: string | null; start_odometer?: number | null }
+export interface VmrsCodeRow { code: string; component: string; system: string }
+export interface BenchmarkJobsResult {
+  rows: number; imported: number;
+  merged: { row: number; job: string; into: string; reason: string }[];
+  skipped: { row: number; job: string; reason: string }[];
+}
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Row-by-row problems, when an imported file was rejected. */
+  errors: ImportProblem[];
+  constructor(status: number, message: string, errors: ImportProblem[] = []) {
     super(message);
     this.status = status;
+    this.errors = errors;
   }
 }
 
@@ -106,7 +134,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new ApiError(res.status, errorText(body, res.status));
+    const errors = body && typeof body === "object" && Array.isArray((body as { errors?: unknown }).errors) ? (body as { errors: ImportProblem[] }).errors : [];
+    throw new ApiError(res.status, errorText(body, res.status), errors);
   }
   return body as T;
 }
@@ -153,6 +182,33 @@ export const api = {
   updateWarrantyRule: (cid: string, id: string, r: Partial<Omit<WarrantyRule, "id" | "vmrs_code">>) =>
     request<unknown>(`/clients/${cid}/warranty-rules/${id}`, json("PUT", r)),
   deleteWarrantyRule: (cid: string, id: string) => request<unknown>(`/clients/${cid}/warranty-rules/${id}`, { method: "DELETE" }),
+  updateSettings: (cid: string, settings: Partial<Thresholds>) => request<Client>(`/clients/${cid}`, json("PATCH", { settings })),
+  importThresholds: (cid: string, file: File) => {
+    const f = new FormData(); f.append("file", file);
+    return request<ThresholdsImportResult>(`/clients/${cid}/settings/import-thresholds`, { method: "POST", body: f });
+  },
+  importWarranty: (cid: string, file: File, mode: "merge" | "replace") => {
+    const f = new FormData(); f.append("file", file); f.append("mode", mode);
+    return request<WarrantyImportResult>(`/clients/${cid}/warranty-rules/import`, { method: "POST", body: f });
+  },
+  vehicles: (cid: string) => request<Vehicle[]>(`/clients/${cid}/vehicles`),
+  addVehicle: (cid: string, v: VehicleInput) => request<Vehicle>(`/clients/${cid}/vehicles`, json("POST", v)),
+  updateVehicle: (cid: string, id: string, v: VehicleInput) => request<Vehicle>(`/clients/${cid}/vehicles/${id}`, json("PUT", v)),
+  deleteVehicle: (cid: string, id: string) => request<unknown>(`/clients/${cid}/vehicles/${id}`, { method: "DELETE" }),
+  deleteAllVehicles: (cid: string) => request<{ removed: number }>(`/clients/${cid}/vehicles`, { method: "DELETE" }),
+  deleteAllWarranty: (cid: string) => request<{ removed: number }>(`/clients/${cid}/warranty-rules`, { method: "DELETE" }),
+  vmrsCodes: (cid: string) => request<VmrsCodeRow[]>(`/clients/${cid}/vmrs-codes`),
+  addBenchmark: (cid: string, b: { vmrs_code: string; benchmark_hours: number; vehicle_class?: string | null }) => request<{ id: string }>(`/clients/${cid}/benchmarks`, json("POST", b)),
+  deleteBenchmark: (cid: string, id: string) => request<unknown>(`/clients/${cid}/benchmarks/${id}`, { method: "DELETE" }),
+  deleteAllBenchmarks: (cid: string) => request<{ removed: number }>(`/clients/${cid}/benchmarks`, { method: "DELETE" }),
+  importBenchmarkJobs: (cid: string, file: File) => {
+    const f = new FormData(); f.append("file", file);
+    return request<BenchmarkJobsResult>(`/clients/${cid}/benchmarks/import-jobs`, { method: "POST", body: f });
+  },
+  importVehicles: (cid: string, file: File) => {
+    const f = new FormData(); f.append("file", file);
+    return request<VehicleImportResult>(`/clients/${cid}/vehicles/import`, { method: "POST", body: f });
+  },
   benchmarks: (cid: string) => request<Benchmark[]>(`/clients/${cid}/benchmarks`),
   importBenchmarks: (cid: string, file: File) => {
     const f = new FormData(); f.append("file", file);

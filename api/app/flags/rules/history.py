@@ -45,6 +45,12 @@ def prior_repair(entries: list[tuple[InvoiceView, LineView]], idx: int) -> Prior
     return None
 
 
+def repair_lines(entries: list[tuple[InvoiceView, LineView]], idx: int) -> list[LineView]:
+    """Every line of this repair (same invoice, same component)."""
+    inv, _ = entries[idx]
+    return [l for i, l in entries if i.id == inv.id]
+
+
 def repair_amount(entries: list[tuple[InvoiceView, LineView]], idx: int) -> tuple[LineView, "Decimal"]:
     """First line of this repair (same invoice, same component) and the combined amount of all its lines."""
     from decimal import Decimal

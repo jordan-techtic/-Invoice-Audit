@@ -25,6 +25,8 @@ export interface Progress {
   next: NextAction;
   refresh: () => Promise<void>;
   markChecksRun: () => void;
+  /** Call when reference data (thresholds, warranty rules, vehicles) changed: the checks are then out of date and run again on the Review page. */
+  markChecksStale: (forClient?: string) => void;
   /** True while the audit checks are running (started from any page). */
   running: boolean;
   /** Runs the audit checks and resolves with the number of flags found. A run already in progress is shared, never doubled. */
@@ -157,6 +159,14 @@ export function ProgressProvider({ cid, children }: { cid: string | null; childr
     setLastRun(now);
   }, [cid]);
 
+  const markChecksStale = useCallback((forClient?: string) => {
+    const target = forClient ?? cid;  // the Settings page can belong to a client other than the one being worked on
+    if (!target) return;
+    const long_ago = new Date(0).toISOString();
+    try { localStorage.setItem(RUN_KEY(target), long_ago); } catch { /* ignore */ }
+    if (target === cid) setLastRun(long_ago);
+  }, [cid]);
+
   const [running, setRunning] = useState(false);
   const runRef = useRef<Promise<number> | null>(null);
   const runChecks = useCallback((): Promise<number> => {
@@ -179,8 +189,8 @@ export function ProgressProvider({ cid, children }: { cid: string | null; childr
   const value = useMemo<Progress | null>(() => {
     if (!cid) return null;
     const empty: Raw = { uploads: [], invoices: [], flags: [], open: 0, confirmed: 0, reports: [] };
-    return { loading: raw === null, error, ...compute(raw ?? empty, lastRun), refresh, markChecksRun, running, runChecks };
-  }, [cid, raw, error, lastRun, refresh, markChecksRun, running, runChecks]);
+    return { loading: raw === null, error, ...compute(raw ?? empty, lastRun), refresh, markChecksRun, markChecksStale, running, runChecks };
+  }, [cid, raw, error, lastRun, refresh, markChecksRun, markChecksStale, running, runChecks]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

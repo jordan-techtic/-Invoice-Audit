@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from .config import get_settings
 from .db import CrossClientWriteError, UnscopedQueryError
 from . import logfilter
-from .routers import admin, auth, clients, flags, inbound, invoices, reports, review, uploads, users
+from .routers import admin, auth, clients, flags, inbound, invoices, reference, reports, review, uploads, users
 
 # Never log request bodies or invoice contents. Only method, path and status.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -59,6 +59,7 @@ app.include_router(uploads.router)
 app.include_router(invoices.router)
 app.include_router(inbound.router)
 app.include_router(flags.router)
+app.include_router(reference.router)
 app.include_router(review.router)
 app.include_router(reports.router)
 app.include_router(admin.router)

@@ -51,7 +51,8 @@ def parse_number(v) -> Decimal | None:
         return None
 
 
-_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y", "%b %d, %Y", "%B %d, %Y", "%d %b %Y", "%b %d %Y", "%m.%d.%Y"]
+_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y", "%b %d, %Y", "%B %d, %Y", "%d %b %Y", "%b %d %Y", "%m.%d.%Y",
+                 "%Y/%m/%d", "%d-%b-%Y", "%d-%B-%Y", "%d-%b-%y", "%Y.%m.%d"]  # year first, and day-month-name-year as some shops print it
 
 
 def parse_date(v) -> date | None:

@@ -33,7 +33,7 @@ def test_money(raw, exp):
     assert N.parse_money(raw) == (Decimal(exp) if exp else None)
 
 
-@pytest.mark.parametrize("raw", ["2026-03-14", "03/14/2026", "3/14/26", "Mar 14, 2026", "March 14, 2026", "14 Mar 2026"])
+@pytest.mark.parametrize("raw", ["2026-03-14", "03/14/2026", "3/14/26", "Mar 14, 2026", "March 14, 2026", "14 Mar 2026", "14-Mar-2026", "2026/03/14", "14-March-2026"])
 def test_dates_normalise_to_iso(raw):
     assert N.parse_date(raw) == date(2026, 3, 14)
 

@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from ..config import get_settings
 from ..models import (
-    DEFAULT_CLIENT_SETTINGS, Client, Flag, FlagExplanationCache, FlagRun, FlagStatus, FlagType, Invoice, Severity, VmrsCode, WarrantyRule,
+    DEFAULT_CLIENT_SETTINGS, Client, Flag, FlagExplanationCache, FlagRun, FlagStatus, FlagType, Invoice, LabourBenchmark, Severity, Vehicle,
+    VmrsCode, WarrantyRule,
 )
 from ..services.normalize import normalize_shop_name
 from . import reference
@@ -32,12 +33,16 @@ def _norm_unit(u: str | None) -> str | None:
 def load_views(db: Session) -> list[InvoiceView]:
     invs = db.scalars(select(Invoice).options(selectinload(Invoice.lines)).order_by(Invoice.created_at, Invoice.page_start)).all()
     vin_to_unit = {i.vin: _norm_unit(i.unit_number) for i in invs if i.vin and i.unit_number}  # one unit may print the VIN on only some invoices
+    # The client's imported fleet list is authoritative: it names the unit for a VIN and gives each unit its class.
+    fleet = db.scalars(select(Vehicle)).all()
+    fleet_vin = {v.vin: _norm_unit(v.unit_number) for v in fleet if v.vin}
+    fleet_class = {_norm_unit(v.unit_number): v.vehicle_class for v in fleet if v.vehicle_class}
     views = []
     for n, i in enumerate(invs):
-        unit = _norm_unit(i.unit_number) or (vin_to_unit.get(i.vin) or i.vin)
+        unit = _norm_unit(i.unit_number) or fleet_vin.get(i.vin) or (vin_to_unit.get(i.vin) or i.vin)
         views.append(InvoiceView(
             id=str(i.id), order=n, shop_key=normalize_shop_name(i.shop_name_raw) if i.shop_name_raw else None, shop_name=i.shop_name_raw,
-            invoice_number=i.invoice_number, invoice_date=i.invoice_date, unit_key=unit, odometer=i.odometer,
+            invoice_number=i.invoice_number, invoice_date=i.invoice_date, unit_key=unit, odometer=i.odometer, vehicle_class=fleet_class.get(unit),
             subtotal=i.subtotal, tax=i.tax, total=i.total,
             lines=[LineView(id=str(ln.id), invoice_id=str(i.id), line_no=ln.line_no, description=ln.description, part_number=ln.part_number,
                             qty=ln.qty, parts_price=ln.parts_price, labour_hours=ln.labour_hours, labour_rate=ln.labour_rate,
@@ -125,9 +130,14 @@ def run_flag_engine(db: Session, run: FlagRun | None = None, only_invoice: str |
 
     views = load_views(db)
     benchmarks, baselines = reference.recompute(db, views, cfg)
-    warranty = {w.vmrs_code: WarrantyView(w.vmrs_code, w.component, w.months, w.miles) for w in db.scalars(select(WarrantyRule))}
+    warranty = {w.vmrs_code: WarrantyView(w.vmrs_code, w.component, w.months, w.miles, w.covers) for w in db.scalars(select(WarrantyRule))}
+    entered = db.scalars(select(LabourBenchmark).where(LabourBenchmark.source != reference.CLIENT_SOURCE)).all()  # imported or typed in
+    licensed = {b.vmrs_code for b in entered if b.vehicle_class is None}  # a value for all vehicles beats the client's own class medians
+    class_bench = {k: m for k, (m, _) in reference.labour_class_medians(views, int(cfg["labour_min_samples"])).items() if k[0] not in licensed}
+    class_bench.update({(b.vmrs_code, b.vehicle_class): b.benchmark_hours for b in entered if b.vehicle_class})  # a value for one class beats everything
     names = {c.code: c.component for c in db.scalars(select(VmrsCode))}
-    ctx = Context(invoices=views, config=cfg, benchmarks=benchmarks, baselines=baselines, warranty=warranty, code_names=names, notes=notes)
+    ctx = Context(invoices=views, config=cfg, benchmarks=benchmarks, class_benchmarks=class_bench, baselines=baselines, warranty=warranty,
+                  code_names=names, notes=notes)
     drafts = run_rules(ctx)
     from ..models import FieldConfidence
 

@@ -35,7 +35,6 @@ from app.db import client_session, system_session  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import (DEFAULT_CLIENT_SETTINGS, Client, ExtractionRun, Flag, FlagRun, Invoice, InvoiceLine, Upload, UploadSource, UploadStatus)  # noqa: E402
 from app.seed import main as seed_main  # noqa: E402
-from app.services.defaults import ensure_default_warranty_rules  # noqa: E402
 from app.services.ingest import ingest_file  # noqa: E402
 from eval.oracle import pages_for_file  # noqa: E402
 from eval.run_eval import HEADER, LINE, Tally, pct, same  # noqa: E402
@@ -70,7 +69,6 @@ def main() -> None:
         c = Client(name=DEMO_NAME, slug=f"demo-{uuid.uuid4().hex[:6]}", inbound_email_token=uuid.uuid4().hex[:12], settings=dict(DEFAULT_CLIENT_SETTINGS))
         db.add(c)
         db.flush()
-        ensure_default_warranty_rules(db, c.id)
         db.commit()
         cid = c.id
     print(f"[1/6] Created client '{DEMO_NAME}'")

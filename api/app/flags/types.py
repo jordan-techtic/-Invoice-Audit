@@ -33,6 +33,7 @@ class InvoiceView:
     invoice_date: date | None = None
     unit_key: str | None = None
     odometer: int | None = None
+    vehicle_class: str | None = None  # from the client's imported fleet list, when the unit is on it
     subtotal: Decimal | None = None
     tax: Decimal | None = None
     total: Decimal | None = None
@@ -45,6 +46,7 @@ class WarrantyView:
     component: str
     months: int
     miles: int | None
+    covers: str = "parts+labour"  # "parts" or "parts+labour"
 
 
 @dataclass
@@ -59,6 +61,7 @@ class Context:
     invoices: list[InvoiceView]
     config: dict
     benchmarks: dict[str, Decimal] = field(default_factory=dict)  # vmrs_code -> typical hours
+    class_benchmarks: dict[tuple[str, str], Decimal] = field(default_factory=dict)  # (vmrs_code, vehicle class) -> typical hours
     baselines: dict[str, Baseline] = field(default_factory=dict)  # normalised part number -> baseline
     warranty: dict[str, WarrantyView] = field(default_factory=dict)
     code_names: dict[str, str] = field(default_factory=dict)
@@ -100,6 +103,14 @@ def line_amount(line: LineView) -> Decimal:
     parts = (line.qty or Decimal(1)) * line.parts_price if line.parts_price is not None else Decimal(0)
     lab = line.labour_hours * line.labour_rate if line.labour_hours is not None and line.labour_rate is not None else Decimal(0)
     return parts + lab
+
+
+def parts_amount(line: LineView) -> Decimal:
+    """The parts part of a line: its cost minus any labour on it (zero for a labour-only line)."""
+    lab = _labour(line) or Decimal(0)
+    if line.parts_price is None and lab > 0:
+        return Decimal(0)
+    return max(line_amount(line) - lab, Decimal(0))
 
 
 def _labour(line: LineView) -> Decimal | None:

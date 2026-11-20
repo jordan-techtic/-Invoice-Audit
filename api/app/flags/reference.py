@@ -31,6 +31,19 @@ def labour_medians(invoices: list[InvoiceView], min_samples: int) -> dict[str, t
     return {c: (_median(v), len(v)) for c, v in by.items() if len(v) >= min_samples}
 
 
+def labour_class_medians(invoices: list[InvoiceView], min_samples: int) -> dict[tuple[str, str], tuple[Decimal, int]]:
+    """Typical hours per (job code, vehicle class), for units on the client's imported fleet list.
+    The same job takes different time on a tractor and a trailer, so one median per code mixes them."""
+    by: dict[tuple[str, str], list[Decimal]] = {}
+    for inv in invoices:
+        if not inv.vehicle_class:
+            continue
+        for ln in inv.lines:
+            if ln.vmrs_code and ln.labour_hours is not None and ln.labour_hours > 0:
+                by.setdefault((ln.vmrs_code, inv.vehicle_class), []).append(ln.labour_hours)
+    return {k: (_median(v), len(v)) for k, v in by.items() if len(v) >= min_samples}
+
+
 def parts_baselines(invoices: list[InvoiceView], min_samples: int) -> dict[str, Baseline]:
     prices: dict[str, list[Decimal]] = {}
     shops: dict[str, set] = {}
@@ -56,6 +69,6 @@ def recompute(db: Session, invoices: list[InvoiceView], cfg: dict) -> tuple[dict
         db.add(PartsPriceBaseline(part_number=k, median_price=b.median, sample_count=b.samples, shop_count=b.shops, computed_at=now))
     db.flush()
     benchmarks = {code: hours for code, (hours, _) in meds.items()}
-    for row in db.scalars(select(LabourBenchmark).where(LabourBenchmark.source != CLIENT_SOURCE)):
-        benchmarks[row.vmrs_code] = row.benchmark_hours
+    for row in db.scalars(select(LabourBenchmark).where(LabourBenchmark.source != CLIENT_SOURCE, LabourBenchmark.vehicle_class.is_(None))):
+        benchmarks[row.vmrs_code] = row.benchmark_hours  # per-class values are applied by the engine
     return benchmarks, base

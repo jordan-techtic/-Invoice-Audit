@@ -1,6 +1,7 @@
 import csv
 import io
 import uuid
+from typing import Literal
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -96,17 +97,19 @@ class RuleIn(BaseModel):
     component: str = Field(min_length=1, max_length=200)
     months: int = Field(ge=1, le=240)
     miles: int | None = Field(default=None, ge=1)
+    covers: Literal["parts", "parts+labour"] = "parts+labour"
 
 
 class RulePatch(BaseModel):
     component: str | None = Field(default=None, min_length=1, max_length=200)
     months: int | None = Field(default=None, ge=1, le=240)
     miles: int | None = Field(default=None, ge=1)
+    covers: Literal["parts", "parts+labour"] | None = None
     clear_miles: bool = False
 
 
 def _rule(r: WarrantyRule) -> dict:
-    return {"id": str(r.id), "vmrs_code": r.vmrs_code, "component": r.component, "months": r.months, "miles": r.miles}
+    return {"id": str(r.id), "vmrs_code": r.vmrs_code, "component": r.component, "months": r.months, "miles": r.miles, "covers": r.covers}
 
 
 @router.get("/warranty-rules")
@@ -132,7 +135,7 @@ def edit_rule(client_id: uuid.UUID, rule_id: uuid.UUID, body: RulePatch, request
     r = db.get(WarrantyRule, rule_id)
     if r is None:
         raise HTTPException(404, "Warranty rule not found.")
-    for k in ("component", "months", "miles"):
+    for k in ("component", "months", "miles", "covers"):
         v = getattr(body, k)
         if v is not None:
             setattr(r, k, v)
@@ -159,9 +162,9 @@ def delete_rule(client_id: uuid.UUID, rule_id: uuid.UUID, request: Request, _: U
 @router.get("/benchmarks")
 def list_benchmarks(client_id: uuid.UUID, db: Session = Depends(client_db)):
     names = {c.code: c.component for c in db.scalars(select(VmrsCode))}
-    rows = db.scalars(select(LabourBenchmark).order_by(LabourBenchmark.vmrs_code)).all()
-    return [{"vmrs_code": b.vmrs_code, "component": names.get(b.vmrs_code, b.vmrs_code), "hours": float(b.benchmark_hours),
-             "source": b.source, "sample_count": b.sample_count} for b in rows]
+    rows = db.scalars(select(LabourBenchmark).order_by(LabourBenchmark.vmrs_code, LabourBenchmark.vehicle_class.nulls_first())).all()
+    return [{"id": str(b.id), "vmrs_code": b.vmrs_code, "component": names.get(b.vmrs_code, b.vmrs_code), "vehicle_class": b.vehicle_class,
+             "hours": float(b.benchmark_hours), "source": b.source, "sample_count": b.sample_count} for b in rows]
 
 
 @router.post("/benchmarks/import")
