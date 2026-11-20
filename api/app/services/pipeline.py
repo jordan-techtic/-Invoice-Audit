@@ -27,7 +27,7 @@ from ..models import (
     Vehicle,
 )
 from ..security import encrypt_bytes
-from . import crosschecks, normalize, vmrs
+from . import crosschecks, normalize, textlayer, vmrs
 from .checks import FieldResult, _lower, normalise_and_check
 from .extraction import ExtractionError, get_provider
 from .extraction.base import ExtractionProvider
@@ -108,6 +108,7 @@ def _run(db: Session, cid: uuid.UUID, up: Upload) -> None:
     data = storage.get(up.storage_key)
     kind = sniff_type(data)
     images = render_pages(data, kind, s.max_pdf_pages)
+    texts = textlayer.page_texts(data) if kind == "pdf" else []   # a clean PDF carries its text: the exact VIN is there, no need to read it from pixels
     provider = get_provider()
 
     pages: list[PageExtraction] = []
@@ -126,6 +127,8 @@ def _run(db: Session, cid: uuid.UUID, up: Upload) -> None:
             again = provider.extract_page(jpg, hint=second_read_hint(problems))
             _record_run(db, up, provider, again, "extraction_second_read")
             page, differ = reconcile(page, again.page, tolerance)
+        if page.is_invoice and n - 1 < len(texts) and textlayer.apply_text_vin(page, texts[n - 1]):
+            differ.get("header", set()).discard("vin")   # the printed text settles which reading was right
         pages.append(page)
         disagreements.append(differ)
         storage.put(page_key(cid, up.id, n), jpg, "image/jpeg")
