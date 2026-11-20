@@ -290,5 +290,6 @@ export function dateTime(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export const REVIEW_QUERY_KEY = "ia.reviewQuery";
-export const REVIEW_IDS_KEY = "ia.reviewIds";
+// Review state is kept per client: a list of flag ids from one client must never be read while working on another.
+export const reviewQueryKey = (cid: string) => `ia.reviewQuery.${cid}`;
+export const reviewIdsKey = (cid: string) => `ia.reviewIds.${cid}`;

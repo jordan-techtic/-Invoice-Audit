@@ -34,6 +34,7 @@ export interface Progress {
 }
 
 const RUN_KEY = (cid: string) => `ia.checksRun.${cid}`;
+const RUN_POLL_LIMIT_MS = 10 * 60 * 1000;
 const num = (v: number | string | null | undefined) => (v === null || v === undefined || v === "" ? 0 : Number(v) || 0);
 
 function readRun(cid: string): string | null {
@@ -77,7 +78,7 @@ export function compute(raw: Raw, lastRun: string | null) {
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   const raw3: Omit<Step, "state">[] = [
     { key: "check", short: "Upload & check", n: 1, label: "Upload and check invoices", href: "/invoices",
-      detail: filesBusy ? `${plural(filesBusy, "file")} being read` : !invoices.length ? "No files yet" : needReview ? `${plural(needReview, "invoice")} to check` : `${plural(invoices.length, "invoice")}, all checked` },
+      detail: filesBusy ? `${plural(filesBusy, "file")} being read` : !invoices.length ? "No files yet" : needReview ? `${plural(needReview, "invoice")} to check` : checked === invoices.length ? `${plural(invoices.length, "invoice")}, all checked` : `${plural(invoices.length, "invoice")}, none need checking` },
     { key: "review", short: "Review flags", n: 2, label: "Review flags", href: "/review",
       detail: checksStale ? "New files since last run" : !checksRun ? "Checks not run yet" : flagsOpen ? `${plural(flagsOpen, "flag")} open` : `${plural(flags.length, "flag")}, all reviewed` },
     { key: "report", short: "Report", n: 3, label: "Create report", href: "/reports",
@@ -175,8 +176,11 @@ export function ProgressProvider({ cid, children }: { cid: string | null; childr
     setRunning(true);
     const p = (async () => {
       const { job_id } = await api.runFlags(cid);
+      const started = Date.now();
       for (;;) {
         await new Promise((res) => setTimeout(res, 2000));
+        // A run that never reports back must not leave the page waiting for ever (the server treats a run stuck for 15 minutes as dead).
+        if (Date.now() - started > RUN_POLL_LIMIT_MS) throw new Error("The checks are taking longer than expected. They may still finish: look at the Review page in a few minutes, or run them again.");
         const r = await api.flagRun(cid, job_id);
         if (r.status === "done") { markChecksRun(); await refresh(); return r.summary?.flags ?? 0; }
         if (r.status === "failed") throw new Error(r.error || "The checks didn't finish. Run them again in a moment.");

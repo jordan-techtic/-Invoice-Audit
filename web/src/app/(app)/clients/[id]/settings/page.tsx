@@ -47,6 +47,7 @@ function Warranty({ cid, admin }: { cid: string; admin: boolean }) {
   const [draft, setDraft] = useState<{ vmrs_code: string; component: string; months: string; miles: string; covers: Covers }>({ vmrs_code: "", component: "", months: "", miles: "", covers: "parts+labour" });
   const [replace, setReplace] = useState(false);
   const [clearAll, setClearAll] = useState(false);
+  const [askDelete, setAskDelete] = useState<WarrantyRule | null>(null);
   const markStale = useProgress()?.markChecksStale;
   const load = useCallback(() => api.warrantyRules(cid).then(setRules).catch((e) => setError(e.message)), [cid]);
   useEffect(() => { load(); }, [load]);
@@ -93,6 +94,9 @@ function Warranty({ cid, admin }: { cid: string; admin: boolean }) {
       <ConfirmDialog open={clearAll} danger title={`Remove all ${rules?.length ?? 0} warranty rules?`} confirmWord="REMOVE" actionLabel="Remove all"
         body="This empties the warranty list, so no repair is checked against a warranty until you import or add rules again."
         onClose={() => setClearAll(false)} onConfirm={async () => { await api.deleteAllWarranty(cid); setClearAll(false); markStale?.(cid); await load(); }} />
+      <ConfirmDialog open={askDelete !== null} danger title={`Delete the rule for ${askDelete?.component ?? "this component"}?`} actionLabel="Delete rule"
+        body="Repairs of this component will no longer be checked against a warranty until you add the rule again."
+        onClose={() => setAskDelete(null)} onConfirm={async () => { const r = askDelete; setAskDelete(null); if (r) await act(() => api.deleteWarrantyRule(cid, r.id)); }} />
       {rules && rules.length === 0 && <p className="mt-4 text-lg">No warranty rules yet.{admin ? " Import a CSV above, or add one below." : ""}</p>}
       {rules && rules.length > 0 && (
         <div className="mt-4 overflow-x-auto bg-surface">
@@ -117,7 +121,7 @@ function Warranty({ cid, admin }: { cid: string; admin: boolean }) {
                           {(Object.keys(COVERS) as Covers[]).map((c) => <option key={c} value={c}>{COVERS[c]}</option>)}
                         </select>
                       </td>
-                      <td className="td text-right"><button className="btn-secondary" aria-label={`Delete rule for ${r.component}`} onClick={() => act(() => api.deleteWarrantyRule(cid, r.id))}>Delete</button></td>
+                      <td className="td text-right"><button className="btn-secondary" aria-label={`Delete rule for ${r.component}`} onClick={() => setAskDelete(r)}>Delete</button></td>
                     </>
                   ) : (
                     <>
@@ -299,7 +303,7 @@ function AuditAndData({ client }: { client: { id: string; name: string } }) {
   const cid = client.id;
   const [info, setInfo] = useState<Client | null>(null);
   const [msg, setMsg] = useState<{ text: string; error?: boolean } | null>(null);
-  const [dialog, setDialog] = useState<null | "raw" | "all">(null);
+  const [dialog, setDialog] = useState<null | "raw" | "all" | "complete">(null);
   const load = useCallback(() => api.client(cid).then(setInfo).catch(() => undefined), [cid]);
   useEffect(() => { load(); }, [load]);
 
@@ -317,7 +321,7 @@ function AuditAndData({ client }: { client: { id: string; name: string } }) {
       {info?.raw_files_deleted_at && <p className="mt-1 font-medium">Raw files deleted on <span className="num">{dateTime(info.raw_files_deleted_at)}</span></p>}
       {msg && <p role={msg.error ? "alert" : "status"} className={`mt-3 ${msg.error ? "text-danger" : "text-confirmed"}`}>{msg.text}</p>}
       <div className="mt-4 flex flex-wrap gap-3">
-        <button className="btn-secondary" onClick={complete}>Mark audit complete</button>
+        <button className="btn-secondary" onClick={() => setDialog("complete")}>Mark audit complete</button>
         <button className="btn-secondary" onClick={() => setDialog("raw")}>Delete raw files now</button>
       </div>
 
@@ -327,6 +331,9 @@ function AuditAndData({ client }: { client: { id: string; name: string } }) {
         <button className="btn-secondary mt-4 border-danger text-danger" onClick={() => setDialog("all")}>Delete everything for this client</button>
       </div>
 
+      <ConfirmDialog open={dialog === "complete"} title="Mark this audit complete?" actionLabel="Mark complete"
+        body={`This starts the countdown: the original invoice files for ${client.name} are deleted automatically ${info?.raw_retention_days ?? "a set number of"} days from now. Extracted data and reports are kept.`}
+        onClose={() => setDialog(null)} onConfirm={async () => { setDialog(null); await complete(); }} />
       <ConfirmDialog open={dialog === "raw"} title="Delete raw files now" confirmWord="DELETE" actionLabel="Delete raw files"
         body={`This deletes the original invoice files and page images for ${client.name}. Extracted data and reports are kept. This cannot be undone.`}
         onClose={() => setDialog(null)} onConfirm={async () => { await api.deleteRaw(cid); setDialog(null); await load(); setMsg({ text: "Raw files deleted." }); }} />

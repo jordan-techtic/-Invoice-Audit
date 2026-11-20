@@ -58,7 +58,9 @@ function Detail({ cid, id }: { cid: string; id: string }) {
     catch (e) { setError(e instanceof Error ? e.message : "Couldn't load this invoice. Refresh the page."); }
   }, [cid, id]);
   useEffect(() => {
-    api.invoice(cid, id).then(setData).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load this invoice. Refresh the page."));
+    let live = true;   // a slow answer for an invoice we have already left must not overwrite the one on screen
+    api.invoice(cid, id).then((d) => { if (live) setData(d); }).catch((e) => { if (live) setError(e instanceof Error ? e.message : "Couldn't load this invoice. Refresh the page."); });
+    return () => { live = false; };
   }, [cid, id]);
 
   async function save(field: string, value: string | null, lineId?: string) {

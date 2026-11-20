@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { aiRating, api, apiUrl, dateTime, DISMISS_WORD, money, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagDetail } from "@/lib/api";
+import { aiRating, api, apiUrl, dateTime, DISMISS_WORD, money, reviewIdsKey, reviewQueryKey, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagDetail } from "@/lib/api";
 import { useProgress } from "@/lib/progress";
 import NeedClient from "@/components/NeedClient";
 
@@ -18,14 +18,14 @@ function num(v: unknown, d = 2) {
   return Number.isFinite(n) ? n.toFixed(d) : String(v);
 }
 
-function readIds(): string[] {
-  try { return JSON.parse(sessionStorage.getItem(REVIEW_IDS_KEY) || "[]"); } catch { return []; }
+function readIds(cid: string): string[] {
+  try { return JSON.parse(sessionStorage.getItem(reviewIdsKey(cid)) || "[]"); } catch { return []; }
 }
 
 function Detail({ cid, fid }: { cid: string; fid: string }) {
   const router = useRouter();
   const [d, setD] = useState<FlagDetail | null>(null);
-  const [ids, setIds] = useState<string[]>(readIds);
+  const [ids, setIds] = useState<string[]>(() => readIds(cid));
   const [error, setError] = useState<string | null>(null);
   const [needsImageCheck, setNeedsImageCheck] = useState(false);   // the flag rests on numbers that were hard to read
   const [panel, setPanel] = useState<null | "dismiss" | "edit">(null);
@@ -47,7 +47,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
     }).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load this flag. Refresh the page."));
     if (idsRef.current.length) return;
     let q = { type: "", shop: "", unit: "", sort: "impact_desc" };
-    try { q = { ...q, ...JSON.parse(sessionStorage.getItem(REVIEW_QUERY_KEY) || "{}") }; } catch { /* default */ }
+    try { q = { ...q, ...JSON.parse(sessionStorage.getItem(reviewQueryKey(cid)) || "{}") }; } catch { /* default */ }
     api.flags(cid, { ...q, status: "open" }).then((l) => { const a = l.flags.map((f) => f.id); idsRef.current = a; setIds(a); }).catch(() => undefined);
   }, [cid, fid]);
 
@@ -59,16 +59,15 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
 
   const progress = useProgress();
   const refreshProgress = progress?.refresh;
-  const blocked = (progress?.needReview ?? 0) > 0 || !!progress?.checksStale;
   const go = useCallback((id: string | undefined) => router.push(id ? `/review/${id}` : "/review"), [router]);
   const idx = ids.indexOf(fid);
 
   const advance = useCallback(() => {
     const rest = idsRef.current.filter((x) => x !== fid);
     idsRef.current = rest;
-    try { sessionStorage.setItem(REVIEW_IDS_KEY, JSON.stringify(rest)); } catch { /* ignore */ }
+    try { sessionStorage.setItem(reviewIdsKey(cid), JSON.stringify(rest)); } catch { /* ignore */ }
     go(rest[idx < 0 ? 0 : idx] ?? rest[0]);
-  }, [fid, idx, go]);
+  }, [cid, fid, idx, go]);
 
   const act = useCallback(async (action: "accept" | "dismiss" | "edit" | "reopen", body: object = {}) => {
     setBusy(true);
@@ -79,10 +78,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
       refreshProgress?.();
       if (action === "reopen") { setD(x); idsRef.current = idsRef.current.includes(fid) ? idsRef.current : [...idsRef.current, fid]; setIds(idsRef.current); }
       else {
-        // That was the last open flag and nothing else blocks the report: go straight to it.
-        const left = await api.flags(cid, { status: "open" }).then((l) => l.count, () => null);
-        if (left === 0 && !blocked) { router.push("/reports"); return; }
-        advance();
+        advance();   // never jump to Reports on its own: the list shows "Create report" once the last flag is decided
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "That didn't save. Try again.";
@@ -90,7 +86,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
       setNeedsImageCheck(action === "accept" && msg.includes("hard to read"));
     }
     finally { setBusy(false); }
-  }, [cid, fid, advance, refreshProgress, blocked, router]);
+  }, [cid, fid, advance, refreshProgress]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -99,6 +95,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
       if (e.repeat || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(t.tagName) || e.metaKey || e.ctrlKey || e.altKey) return;
       const k = e.key.toLowerCase();
       if (k === "escape") setPanel(null);
+      else if (panel) return;   // UI2: while a panel is open no shortcut may act on the flag behind it
       else if (!d) return;
       else if (k === "a" && d.status === "open" && !busy) act("accept");
       else if (k === "d" && d.status === "open") { e.preventDefault(); openPanel("dismiss"); }
@@ -108,7 +105,7 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [d, busy, act, go, ids, idx, fid, openPanel]);
+  }, [d, busy, panel, act, go, ids, idx, fid, openPanel]);
 
   if (error && !d) return <p role="alert" className="text-danger">{error} <Link href="/review" className="btn-link">Back to flags</Link></p>;
   if (!d) return <p className="text-muted" role="status">Loading flag…</p>;

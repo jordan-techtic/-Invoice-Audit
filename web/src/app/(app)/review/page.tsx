@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { aiRating, api, money, DISMISS_WORD, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagList } from "@/lib/api";
+import { aiRating, api, money, DISMISS_WORD, reviewQueryKey, reviewIdsKey, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagList } from "@/lib/api";
 import NeedClient from "@/components/NeedClient";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { IconArrow, IconCheck } from "@/components/Icons";
@@ -30,12 +30,12 @@ function Review({ cid }: { cid: string }) {
 
   useEffect(() => { api.flagFilters(cid).then(setFilters).catch(() => undefined); }, [cid]);
   useEffect(() => {
-    try { sessionStorage.setItem(REVIEW_QUERY_KEY, JSON.stringify({ type, shop, unit, sort })); } catch { /* ignore */ }
-  }, [type, shop, unit, sort]);
+    try { sessionStorage.setItem(reviewQueryKey(cid), JSON.stringify({ type, shop, unit, sort })); } catch { /* ignore */ }
+  }, [cid, type, shop, unit, sort]);
 
   const load = useCallback(() => api.flags(cid, { type, status, shop, unit, sort }).then(async (l) => {
     setList(l);
-    try { sessionStorage.setItem(REVIEW_IDS_KEY, JSON.stringify(l.flags.filter((f) => f.status === "open").map((f) => f.id))); } catch { /* ignore */ }
+    try { sessionStorage.setItem(reviewIdsKey(cid), JSON.stringify(l.flags.filter((f) => f.status === "open").map((f) => f.id))); } catch { /* ignore */ }
     setError(null);
     if (l.count > 0 || l.confirmed_total > 0 || l.open_total > 0) setAnyFlags(true);
     else setAnyFlags((await api.flags(cid, {})).count > 0);
@@ -99,11 +99,7 @@ function Review({ cid }: { cid: string }) {
     setNotice(`${flagWord(r.changed)} ${verb}.${r.unchanged ? ` ${flagWord(r.unchanged)} already ${verb}.` : ""}`);
     await load();
     await prog?.refresh();
-    // Last open flag done and nothing else blocks the report: go straight to it.
-    if (action !== "reopen") {
-      const left = await api.flags(cid, { status: "open" }).then((l) => l.count, () => null);
-      if (left === 0 && (prog?.needReview ?? 0) === 0 && !prog?.checksStale) router.push("/reports");
-    }
+    // No automatic jump to Reports: once the last flag is decided this page offers "Create report" and the person chooses when.
   }
 
   const hasOpen = (list?.open_total ?? 0) > 0;
