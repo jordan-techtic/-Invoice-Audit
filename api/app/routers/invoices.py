@@ -61,7 +61,8 @@ def list_invoices(client_id: uuid.UUID, status: str | None = None, db: Session =
     for rid, n in review_counts.items():
         inv_id = line_to_invoice.get(rid, rid)
         per_invoice[inv_id] = per_invoice.get(inv_id, 0) + n
-    q = select(Invoice).order_by(Invoice.created_at.desc()).limit(1000)
+    # Newest created first. Invoices created at the same instant (one upload can hold several) keep a stable order, so the list never reshuffles between reloads.
+    q = select(Invoice).order_by(Invoice.created_at.desc(), Invoice.id.desc()).limit(1000)
     if status:
         try:
             q = q.where(Invoice.review_status == ReviewStatus(status))
@@ -73,6 +74,7 @@ def list_invoices(client_id: uuid.UUID, status: str | None = None, db: Session =
             "id": str(i.id), "shop": i.shop_name_raw, "invoice_number": i.invoice_number, "invoice_date": _j(i.invoice_date),
             "unit_number": i.unit_number, "total": _j(i.total), "review_status": i.review_status.value,
             "fields_to_check": per_invoice.get(i.id, 0) if i.review_status == ReviewStatus.needs_review else 0,
+            "created_at": i.created_at.isoformat(),
         }
         for i in rows
     ]
