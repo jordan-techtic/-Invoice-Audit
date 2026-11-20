@@ -179,6 +179,7 @@ export const api = {
     request<{ changed: number; unchanged: number; skipped: number; needs_extraction_check?: string[] }>(`/clients/${cid}/flags/bulk`, json("POST", { ids, action, ...extra })),
   recheck: (cid: string, iid: string) => request<{ flags: number; added: number; removed: number }>(`/clients/${cid}/invoices/${iid}/recheck`, { method: "POST" }),
   client: (cid: string) => request<Client>(`/clients/${cid}`),
+  reportPreview: (cid: string) => request<{ invoices_included: number; invoices_left_out: number; flags: number; recoverable: number; open_flags: number; first_open_flag: string | null }>(`/clients/${cid}/reports/preview`),
   reportSettings: (cid: string) => request<{ default_offer_text: string; company_name: string }>(`/clients/${cid}/report-settings`),
   createReport: (cid: string, body: { expires_days: number; offer_text: string }) => request<ReportItem>(`/clients/${cid}/reports`, json("POST", body)),
   reports: (cid: string) => request<ReportItem[]>(`/clients/${cid}/reports`),

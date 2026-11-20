@@ -249,3 +249,49 @@ def test_an_invoice_that_adds_up_marks_no_line(admin_client, world):
     upload(admin_client, cid, body)
     inv = _fields(admin_client, cid, num)
     assert not inv["header"]["total"]["needs_review"] and not any(ln["line_total"]["needs_review"] for ln in inv["lines"])
+
+
+# ------------------------------------------------------------------ reports are built from checked invoices
+def _flag(db, inv, amount, status, key):
+    from app.models import Flag, FlagStatus, FlagType, Severity
+    db.add(Flag(invoice_id=inv.id, type=FlagType.math_error, severity=Severity.medium, estimated_dollar_impact=D(amount),
+                plain_english_reason="The totals likely don't add up. Possible maths error.", details={}, dedupe_key=key, status=FlagStatus(status)))
+
+
+def test_a_report_holds_only_checked_invoices_and_says_how_many_were_left_out(admin_client, world):
+    from datetime import date
+    from app.models import FlagRun, ReviewStatus
+    from .test_flags_engine import add_invoice
+    cid = world["a"]
+    with client_session(cid) as db:
+        done = add_invoice(db, "R-1", date(2025, 3, 1), total=D("100"))
+        done.review_status = ReviewStatus.reviewed
+        ready = add_invoice(db, "R-2", date(2025, 3, 2), total=D("80"))
+        ready.review_status = ReviewStatus.ready                       # nothing needed checking: counts as checked
+        waiting = add_invoice(db, "R-3", date(2025, 3, 3), total=D("900"))   # still needs review
+        _flag(db, done, "40.00", "accepted", "a"); _flag(db, ready, "10.00", "accepted", "b")
+        _flag(db, waiting, "500.00", "accepted", "c"); _flag(db, waiting, "70.00", "open", "d")   # its open flag must not block
+        db.add(FlagRun(status="done"))
+        db.commit()
+    p = admin_client.get(f"/clients/{cid}/reports/preview").json()
+    assert p == {"invoices_included": 2, "invoices_left_out": 1, "flags": 2, "recoverable": 50.0, "open_flags": 0, "first_open_flag": None}
+    r = admin_client.post(f"/clients/{cid}/reports", json={})
+    assert r.status_code == 201 and r.json()["recoverable"] == 50.0
+    snap = admin_client.get(f"/clients/{cid}/reports/{r.json()['id']}").json()
+    assert "1 invoice was still waiting to be checked and is not in this report" in snap["note"]
+
+
+def test_an_open_flag_on_a_checked_invoice_still_blocks_the_report(admin_client, world):
+    from datetime import date
+    from app.models import FlagRun, ReviewStatus
+    from .test_flags_engine import add_invoice
+    cid = world["a"]
+    with client_session(cid) as db:
+        inv = add_invoice(db, "R-9", date(2025, 3, 1), total=D("100"))
+        inv.review_status = ReviewStatus.reviewed
+        _flag(db, inv, "40.00", "open", "z")
+        db.add(FlagRun(status="done"))
+        db.commit()
+    assert admin_client.get(f"/clients/{cid}/reports/preview").json()["open_flags"] == 1
+    r = admin_client.post(f"/clients/{cid}/reports", json={})
+    assert r.status_code == 409 and "still needs a decision" in r.json()["detail"]

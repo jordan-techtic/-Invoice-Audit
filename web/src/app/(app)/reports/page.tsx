@@ -31,7 +31,14 @@ function Reports({ cid }: { cid: string }) {
   const load = useCallback(() => api.reports(cid).then(setRows).catch((e) => setProblem({ text: e instanceof Error ? e.message : "Couldn't load reports." })), [cid]);
   useEffect(() => { load(); }, [load]);
 
-  function ask() { setProblem(null); setDone(null); confirmDialog.current?.showModal(); }
+  const [preview, setPreview] = useState<Awaited<ReturnType<typeof api.reportPreview>> | null>(null);
+  const loadPreview = useCallback(() => api.reportPreview(cid).then(setPreview).catch(() => setPreview(null)), [cid]);
+  useEffect(() => { loadPreview(); }, [loadPreview]);
+  function ask() {
+    setProblem(null); setDone(null);
+    loadPreview();
+    confirmDialog.current?.showModal();
+  }
 
   // Creating uses the standard settings (30-day link, default offer text). There is nothing to fill in.
   async function create() {
@@ -46,6 +53,7 @@ function Reports({ cid }: { cid: string }) {
       await load();
       prog?.refresh();
       setDone(`Report version ${r.version} created.`);
+      loadPreview();
     } catch (err) {
       const status = (err as { status?: number }).status;
       setProblem({ text: err instanceof Error ? err.message : "Couldn't create the report. Try again.", conflict: status === 409 });
@@ -66,7 +74,8 @@ function Reports({ cid }: { cid: string }) {
   }
 
   const latest = rows?.reduce<ReportItem | null>((m, r) => (!m || r.version > m.version ? r : m), null) ?? null;
-  const openFlags = prog?.flagsOpen ?? 0;
+  // Only open flags on checked invoices block a report; flags on invoices still waiting to be checked are left out with them.
+  const openFlags = preview?.open_flags ?? 0;
 
   function actions(r: ReportItem, big = false) {
     const sz = big ? "" : " btn-sm";
@@ -101,8 +110,8 @@ function Reports({ cid }: { cid: string }) {
 
       {openFlags > 0 && (
         <p className="mt-6 flex flex-wrap items-center gap-3 rounded-md border border-amber bg-amber-soft px-4 py-3">
-          <span><b>{openFlags} {openFlags === 1 ? "flag is" : "flags are"} still open.</b> Review them first so the report is complete.</span>
-          <Link href="/review" className="btn-secondary btn-sm">Review flags</Link>
+          <span><b>{openFlags} {openFlags === 1 ? "flag is" : "flags are"} still open.</b> {openFlags === 1 ? "It is" : "They are"} on checked invoices, so decide {openFlags === 1 ? "it" : "them"} before creating the report.</span>
+          <Link href={preview?.first_open_flag ? `/review/${preview.first_open_flag}` : "/review"} className="btn-secondary btn-sm">{openFlags === 1 ? "Review it" : "Review flags"}</Link>
         </p>
       )}
 
@@ -180,11 +189,24 @@ function Reports({ cid }: { cid: string }) {
         <div className="p-6">
           <h2 id="new-report-title" className="text-lg">New report</h2>
           <p className="mt-2">
-            It will include <b className="text-money">{money(prog?.confirmedTotal ?? 0)}</b> of accepted findings from <b>{prog?.invoices ?? 0}</b> invoices.
+            {preview ? (
+              <>It will include <b className="text-money">{money(preview.recoverable)}</b> from {preview.flags} accepted {preview.flags === 1 ? "finding" : "findings"} on <b>{preview.invoices_included}</b> checked {preview.invoices_included === 1 ? "invoice" : "invoices"}.</>
+            ) : "Working out what the report will include…"}
           </p>
+          {preview && preview.invoices_left_out > 0 && (
+            <p className="mt-2 rounded-md bg-amber-soft px-3 py-2 text-sm" data-testid="left-out">
+              {preview.invoices_left_out} {preview.invoices_left_out === 1 ? "invoice is" : "invoices are"} still waiting to be checked and will be left out, with {preview.invoices_left_out === 1 ? "its" : "their"} flags. Check {preview.invoices_left_out === 1 ? "it" : "them"} first if you want {preview.invoices_left_out === 1 ? "it" : "them"} in this report.
+            </p>
+          )}
+          {preview && preview.open_flags > 0 && (
+            <p className="mt-2 text-sm text-danger" role="alert">
+              {preview.open_flags} {preview.open_flags === 1 ? "flag on a checked invoice still needs" : "flags on checked invoices still need"} a decision first.{" "}
+              {preview.first_open_flag && <Link href={`/review/${preview.first_open_flag}`} className="btn-link text-danger">Review {preview.open_flags === 1 ? "it" : "the first one"}</Link>}
+            </p>
+          )}
           <div className="mt-6 flex flex-wrap justify-end gap-3">
             <button type="button" className="btn-secondary" onClick={() => confirmDialog.current?.close()}>Cancel</button>
-            <button type="button" className="btn-primary" onClick={create}>Create report</button>
+            <button type="button" className="btn-primary" onClick={create} disabled={!!preview && preview.open_flags > 0}>Create report</button>
           </div>
         </div>
       </dialog>

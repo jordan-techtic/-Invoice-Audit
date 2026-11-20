@@ -78,22 +78,35 @@ def audit_period(dates: list) -> str | None:
     return lo if lo == hi else f"{lo} – {hi}"
 
 
+# A report is built from checked invoices only (status Ready or Checked). Invoices still waiting to be checked are left
+# out, with their flags, and the report says how many: their numbers may still be misreads.
+CHECKED = Invoice.review_status != ReviewStatus.needs_review
+
+
 def open_flag_count(db: Session) -> int:
-    return db.scalar(select(func.count()).select_from(Flag).where(Flag.status == FlagStatus.open)) or 0
+    """Open flags that would go into a report: those on checked invoices."""
+    return db.scalar(select(func.count()).select_from(Flag).join(Invoice, Invoice.id == Flag.invoice_id)
+                     .where(Flag.status == FlagStatus.open, CHECKED)) or 0
+
+
+def left_out_count(db: Session) -> int:
+    """Invoices still waiting to be checked: not in the report."""
+    return db.scalar(select(func.count()).select_from(Invoice).where(Invoice.review_status == ReviewStatus.needs_review)) or 0
 
 
 def flags_basis(db: Session) -> str:
     """A fingerprint of the decisions a report is built from (which flags are accepted or edited, and for how much)."""
     import hashlib
 
-    rows = db.execute(select(Flag.id, Flag.status, Flag.estimated_dollar_impact).where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited]))).all()
+    rows = db.execute(select(Flag.id, Flag.status, Flag.estimated_dollar_impact).join(Invoice, Invoice.id == Flag.invoice_id)
+                      .where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited]), CHECKED)).all()
     blob = "|".join(sorted(f"{i}:{st.value}:{amt}" for i, st, amt in rows))
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
 def accepted_flags_with_changed_inputs(db: Session) -> int:
     """Accepted or edited flags whose underlying numbers changed after the decision (or no longer produce the flag)."""
-    rows = db.scalars(select(Flag).where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited]))).all()
+    rows = db.scalars(select(Flag).join(Invoice, Invoice.id == Flag.invoice_id).where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited]), CHECKED)).all()
     return sum(1 for f in rows if (f.details or {}).get("inputs_changed") or (f.details or {}).get("no_longer_applies"))
 
 
@@ -139,10 +152,11 @@ def build_snapshot(db: Session, client: Client, offer_text: str | None, provider
     cfg = load_settings()
     rows = db.execute(
         select(Flag, Invoice, InvoiceLine).join(Invoice, Invoice.id == Flag.invoice_id).outerjoin(InvoiceLine, InvoiceLine.id == Flag.line_id)
-        .where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited])).order_by(Flag.estimated_dollar_impact.desc())
+        .where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited]), CHECKED).order_by(Flag.estimated_dollar_impact.desc())
     ).all()
     # invoices still waiting for review are not "reviewed": leave them out of the count, the spend and the period
-    invoices = db.execute(select(Invoice.invoice_date, Invoice.total).where(Invoice.review_status != ReviewStatus.needs_review)).all()
+    invoices = db.execute(select(Invoice.invoice_date, Invoice.total).where(CHECKED)).all()
+    left_out = left_out_count(db)
     total_spend = float(sum((t for _, t in invoices if t is not None), Decimal(0)))
     period = audit_period([d for d, _ in invoices])
     recoverable = float(sum((f.estimated_dollar_impact for f, _, _ in rows), Decimal(0)))
@@ -194,7 +208,8 @@ def build_snapshot(db: Session, client: Client, offer_text: str | None, provider
                       "amount": float(f.estimated_dollar_impact), "type_label": TYPE_LABELS[f.type.value]}
                      for f, inv, _ in sorted(rows, key=lambda r: (r[1].invoice_date or date.min, r[1].invoice_number or ""))],
         "next_steps": {"text": (offer_text if offer_text is not None else offer_text_for(set(detail)))},
-        "note": cfg["note"] + (cfg.get("note_reviewed", "") if rows and all(f.reviewed_by for f, _, _ in rows) else ""),
+        "note": cfg["note"] + (cfg.get("note_reviewed", "") if rows and all(f.reviewed_by for f, _, _ in rows) else "")
+        + (f" {left_out} {_plural(left_out, 'invoice was', 'invoices were')} still waiting to be checked and {'is' if left_out == 1 else 'are'} not in this report." if left_out else ""),
         "basis": flags_basis(db),
         "expires_at": expires_at.isoformat() if expires_at else None,
     }

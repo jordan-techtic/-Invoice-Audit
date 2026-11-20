@@ -163,5 +163,7 @@ def test_an_accepted_flag_whose_inputs_changed_is_marked_and_blocks_a_report(adm
     admin_client.patch(f"/clients/{cid}/invoices/{inv['id']}/fields", json={"field": "total", "value": "580.00"})   # the number the flag rested on is corrected
     now = next(x for x in _flags(admin_client, cid) if x["id"] == f["id"])
     assert now["status"] == "accepted" and now["evidence"].get("no_longer_applies") is True
+    # Reports only hold checked invoices, so check this one: its accepted-but-stale flag must then block the report.
+    assert admin_client.post(f"/clients/{cid}/invoices/{inv['id']}/mark-checked?confirm_as_printed=true").status_code == 200
     r = admin_client.post(f"/clients/{cid}/reports", json={})
     assert r.status_code == 409 and "corrected after" in r.json()["detail"]

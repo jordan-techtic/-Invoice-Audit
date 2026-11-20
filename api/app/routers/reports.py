@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
@@ -12,7 +13,7 @@ from .. import audit, storage
 from ..config import get_settings
 from ..db import bind_client, system_session, SessionLocal
 from ..deps import client_db, current_user
-from ..models import Client, Flag, FlagStatus, Report, Role, User
+from ..models import Client, Flag, FlagStatus, Invoice, Report, Role, User
 from ..security import decrypt_bytes, encrypt_bytes, new_token, sha256_hex
 from ..services import report_data
 from ..services.report_pdf import render_pdf
@@ -54,8 +55,22 @@ def _snapshot(r: Report) -> dict:
 @router.get("/clients/{client_id}/report-settings")
 def report_settings(client_id: uuid.UUID, db: Session = Depends(client_db)):
     cfg = report_data.load_settings()
-    types = {f.type.value for f in db.scalars(select(Flag).where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited])))}
+    types = {f.type.value for f in db.scalars(select(Flag).join(Invoice, Invoice.id == Flag.invoice_id)
+                                              .where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited]), report_data.CHECKED))}
     return {"default_offer_text": report_data.offer_text_for(types), "company_name": cfg["company_name"], "default_expiry_days": cfg["link_expiry_days_default"]}
+
+
+@router.get("/clients/{client_id}/reports/preview")
+def report_preview(client_id: uuid.UUID, db: Session = Depends(client_db)):
+    """What a report created now would hold: checked invoices only. Shown before the person confirms."""
+    flags = db.execute(select(Flag.estimated_dollar_impact).join(Invoice, Invoice.id == Flag.invoice_id)
+                       .where(Flag.status.in_([FlagStatus.accepted, FlagStatus.edited]), report_data.CHECKED)).all()
+    checked = db.scalar(select(func.count()).select_from(Invoice).where(report_data.CHECKED)) or 0
+    first_open = db.scalar(select(Flag.id).join(Invoice, Invoice.id == Flag.invoice_id).where(Flag.status == FlagStatus.open, report_data.CHECKED)
+                           .order_by(Flag.estimated_dollar_impact.desc()).limit(1))
+    return {"invoices_included": checked, "invoices_left_out": report_data.left_out_count(db), "flags": len(flags),
+            "recoverable": float(sum((a for (a,) in flags), Decimal(0))), "open_flags": report_data.open_flag_count(db),
+            "first_open_flag": str(first_open) if first_open else None}
 
 
 @router.post("/clients/{client_id}/reports", status_code=201)
