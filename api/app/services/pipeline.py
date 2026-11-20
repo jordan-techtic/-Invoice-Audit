@@ -129,15 +129,83 @@ def _run(db: Session, cid: uuid.UUID, up: Upload) -> None:
         raise ExtractionError("We couldn't find an invoice in this file. Check that it shows a repair invoice and upload it again.")
 
     any_review = False
+    stored, copies = 0, []
     for idxs in groups:
         merged = merge_group(pages, idxs)
         result = normalise_and_check(merged.header, merged.lines, tolerance=tolerance, threshold=threshold)
+        same = same_invoice_already_stored(db, up, result.header)
+        if same is not None:  # a second photo or scan of an invoice we already have: de-duplicate, never a flag
+            copies.append(same)
+            continue
+        fleet_checks(db, result.header)
         inv = _store_invoice(db, up, merged, result, threshold, provider)
+        stored += 1
         any_review = any_review or inv.review_status == ReviewStatus.needs_review
-    up.invoice_count = len(groups)
-    up.status = UploadStatus.needs_review if any_review else UploadStatus.done
+    up.invoice_count = stored
     up.status_detail = None
+    if copies and not stored:
+        first = copies[0]
+        src = db.get(Upload, first.source_upload_id) if first.source_upload_id else None
+        up.status, up.duplicate_of = UploadStatus.duplicate, (src.id if src else None)
+        up.status_detail = (f"Skipped: the same invoice{f' ({first.invoice_number})' if first.invoice_number else ''} is already in"
+                            f"{f' {src.filename}' if src else ' this audit'}. It looks like another photo or scan of the same paper.")
+    else:
+        up.status = UploadStatus.needs_review if any_review else UploadStatus.done
+        if copies:
+            up.status_detail = f"{len(copies)} invoice{'s' if len(copies) != 1 else ''} in this file {'were' if len(copies) != 1 else 'was'} already uploaded, so {'they were' if len(copies) != 1 else 'it was'} skipped."
     db.commit()
+
+
+def _alnum(s) -> str:
+    return "".join(c for c in str(s or "").upper() if c.isalnum())
+
+
+def same_invoice_already_stored(db: Session, up: Upload, h: dict[str, FieldResult]) -> Invoice | None:
+    """An invoice from another file with the same shop, invoice number, date and total is the same piece of paper uploaded
+    twice (for example a phone photo of a scanned invoice). Billing the same job again shows up as a new number or date,
+    which the duplicate rule checks instead."""
+    num, d, total, shop = h["invoice_number"].value, h["invoice_date"].value, h["total"].value, h["shop_name"].value
+    if not (num and d and total is not None and shop):
+        return None
+    for inv in db.scalars(select(Invoice).where(Invoice.invoice_date == d, Invoice.total == total)):
+        if inv.source_upload_id != up.id and _alnum(inv.invoice_number) == _alnum(num) and \
+                normalize_shop_name(inv.shop_name_raw or "") == normalize_shop_name(shop):
+            return inv
+    return None
+
+
+def fleet_checks(db: Session, h: dict[str, FieldResult]) -> None:
+    """Send header fields to review when they disagree with the client's own records: the imported vehicle list and the
+    dates of the client's other invoices. The model is often confident about a misread digit; these checks are not."""
+    import difflib
+    import statistics
+
+    fleet = [v for v in db.scalars(select(Vehicle)) if v.vehicle_class]  # the imported fleet list, not units made from invoices
+    if fleet:
+        by_unit = {_alnum(v.unit_number): v for v in fleet}
+        by_vin = {v.vin: v for v in fleet if v.vin}
+        unit, vin = h["unit_number"].value, h["vin"].value
+        if unit:
+            v = by_unit.get(_alnum(unit))
+            if v is None:
+                hint = by_vin.get(vin) if vin else None
+                if hint is None:
+                    close = difflib.get_close_matches(_alnum(unit), list(by_unit), n=1, cutoff=0.6)
+                    hint = by_unit[close[0]] if close else None
+                _lower(h["unit_number"], 0.5, f"Check this: unit {unit} isn't on the vehicle list." + (f" Did you mean {hint.unit_number}?" if hint else ""))
+            else:
+                if vin and v.vin and vin != v.vin:
+                    _lower(h["vin"], 0.5, f"Check this: the vehicle list has VIN {v.vin} for unit {v.unit_number}.")
+                odo = h["odometer"].value
+                if odo is not None and v.start_odometer and odo < v.start_odometer:
+                    _lower(h["odometer"], 0.5, f"Check this: lower than this unit's starting odometer on the vehicle list ({v.start_odometer:,}).")
+    d = h["invoice_date"].value
+    if d is not None:
+        dates = [x for x in db.scalars(select(Invoice.invoice_date).where(Invoice.invoice_date.is_not(None)).limit(2000))]
+        if len(dates) >= 5:
+            mid = sorted(dates)[len(dates) // 2]
+            if abs((d - mid).days) > 548:
+                _lower(h["invoice_date"], 0.4, f"Check this: {d:%b %Y} is far from this client's other invoices (most are around {mid:%b %Y}).")
 
 
 def _fc(db: Session, rtype: str, rid: uuid.UUID, field: str, fr: FieldResult, threshold: float) -> bool:

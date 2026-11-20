@@ -20,6 +20,8 @@ interface Props {
   label: string;
   state: FieldState | undefined;
   onSave: (value: string | null) => Promise<void>;
+  /** Shown on a field marked Check: the analyst looked at the image and the value is right as read. */
+  onConfirm?: () => Promise<void>;
   compact?: boolean;
   hideLabel?: boolean;
   className?: string;
@@ -27,7 +29,7 @@ interface Props {
 
 type Phase = "idle" | "saving" | "saved" | "error";
 
-export default function FieldInput({ field, label, state, onSave, compact, hideLabel, className = "" }: Props) {
+export default function FieldInput({ field, label, state, onSave, onConfirm, compact, hideLabel, className = "" }: Props) {
   const id = useId();
   const shown = display(field, state?.value ?? null);
   const [draft, setDraft] = useState(shown);
@@ -54,11 +56,11 @@ export default function FieldInput({ field, label, state, onSave, compact, hideL
 
   const noteId = `${id}-note`;
   return (
-    <div className={`${flagged ? "border-l-4 border-amber bg-amber-soft pl-2" : ""} ${className}`}>
+    <div className={`${flagged ? "rounded-r-md border-l-4 border-danger bg-[#fdecea] py-1 pl-2 pr-1" : ""} ${className}`}>
       <div className="flex items-center justify-between gap-2">
         <label htmlFor={id} className={hideLabel ? "sr-only" : "text-sm font-medium"}>{label}</label>
         {flagged && (
-          <span className="inline-flex items-center gap-1 text-sm font-bold text-ink"><span className="text-money"><IconAlert /></span>Check</span>
+          <span className="inline-flex items-center gap-1 text-sm font-bold text-danger"><IconAlert />Check</span>
         )}
       </div>
       <input
@@ -71,13 +73,19 @@ export default function FieldInput({ field, label, state, onSave, compact, hideL
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.currentTarget.blur(); } }}
         aria-invalid={phase === "error"}
         aria-describedby={error || flagged ? noteId : undefined}
-        className={`field ${compact ? "min-h-[40px] px-2 text-sm" : "mt-1"} ${numeric ? "num text-right" : ""}`}
+        className={`field ${compact ? "min-h-[40px] px-2 text-sm" : "mt-1"} ${numeric ? "num text-right" : ""} ${flagged && phase !== "error" ? "border-2 border-danger" : ""}`}
       />
       <div id={noteId} className="min-h-0 text-sm" aria-live="polite">
         {flagged && state?.note && phase !== "error" && <p className="mt-1 text-ink">{state.note}</p>}
         {phase === "error" && <p className="mt-1 text-danger">{error}</p>}
         {phase === "saving" && <p className="mt-1 text-muted">Saving…</p>}
         {phase === "saved" && <p className="mt-1 inline-flex items-center gap-1 text-confirmed"><IconCheck />Saved</p>}
+        {flagged && onConfirm && phase !== "saving" && (
+          <button type="button" className="btn-link min-h-[32px] text-sm" onClick={async () => {
+            setError(null);
+            try { await onConfirm(); } catch (e) { setError(e instanceof Error ? e.message : "Couldn't confirm this field. Try again."); setPhase("error"); }
+          }} aria-label={`${label} looks right`}>Looks right</button>
+        )}
       </div>
     </div>
   );

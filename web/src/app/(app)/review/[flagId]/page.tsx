@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
-import { api, apiUrl, dateTime, DISMISS_WORD, money, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagDetail } from "@/lib/api";
+import { aiRating, api, apiUrl, dateTime, DISMISS_WORD, money, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagDetail } from "@/lib/api";
 import { useProgress } from "@/lib/progress";
 import NeedClient from "@/components/NeedClient";
 
@@ -160,6 +160,16 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
         <section aria-label="Flag" className="min-w-0">
           <p className="text-sm text-muted">{TYPE_NAME[d.type] ?? d.type} · {d.invoice.shop} · Unit <span className="num">{d.invoice.unit}</span></p>
           <h1 className="mt-2 max-w-prose text-lg font-bold">{d.reason}</h1>
+          {(() => {
+            const r = aiRating(d.ai_score);
+            return (
+              <p className="mt-2 text-sm" data-testid="ai-rating">
+                <span className="text-muted">AI rating: </span>
+                <span className={`font-bold ${r.tone === "good" ? "text-confirmed" : r.tone === "low" ? "text-danger" : "text-muted"}`}>{r.pct}</span>
+                <span className="text-muted"> · {r.tone === "none" ? "not rated (standard wording was used)" : r.words}</span>
+              </p>
+            );
+          })()}
           <p className="num mt-3 text-2xl font-bold text-money" data-testid="impact">{money(d.impact)}</p>
           {d.evidence_lines.length > 0 && (
             <ul className="mt-3 max-w-prose list-disc space-y-1 pl-5">{d.evidence_lines.map((l, i) => <li key={i}>{l}</li>)}</ul>

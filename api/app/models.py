@@ -86,6 +86,8 @@ DEFAULT_CLIENT_SETTINGS: dict = {
     # extraction
     "confidence_threshold": 0.80,
     "math_tolerance": 1.00,
+    "tax_min_invoices": 3,          # other invoices from the same shop needed before its usual tax rate is trusted
+    "tax_rate_tolerance_pct": 0.25, # flag tax charged more than this many percentage points above the shop's usual rate
     # flag rules
     "labour_over_benchmark_pct": 20,
     "labour_min_samples": 5,

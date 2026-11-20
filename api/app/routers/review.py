@@ -39,7 +39,7 @@ def flag_detail(db: Session, f: Flag, client_id: uuid.UUID) -> dict:
     return {
         "id": str(f.id), "type": f.type.value, "severity": f.severity.value, "status": f.status.value,
         "impact": float(f.estimated_dollar_impact), "original_impact": _j(f.original_impact),
-        "reason": f.plain_english_reason, "original_reason": f.original_reason,
+        "reason": f.plain_english_reason, "original_reason": f.original_reason, "ai_score": f.ai_score,
         "dismiss_reason": f.dismiss_reason, "note": f.analyst_note,
         "reviewed_by": _name(db, f.reviewed_by), "reviewed_at": f.reviewed_at,
         "evidence_lines": evidence_lines(f.type.value, f.details or {}, f.estimated_dollar_impact),

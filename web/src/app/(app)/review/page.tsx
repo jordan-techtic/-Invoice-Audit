@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, money, DISMISS_WORD, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagList } from "@/lib/api";
+import { aiRating, api, money, DISMISS_WORD, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagList } from "@/lib/api";
 import NeedClient from "@/components/NeedClient";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { IconArrow, IconCheck } from "@/components/Icons";
@@ -22,7 +22,7 @@ function Review({ cid }: { cid: string }) {
   const prog = useProgress();
   const [shop, setShop] = useState("");
   const [unit, setUnit] = useState("");
-  const [sort, setSort] = useState<"impact_desc" | "impact_asc">("impact_desc");
+  const [sort, setSort] = useState<"impact_desc" | "impact_asc" | "score_desc">("impact_desc");
   const [filters, setFilters] = useState<{ shops: string[]; units: string[] }>({ shops: [], units: [] });
   const [anyFlags, setAnyFlags] = useState<boolean | null>(null);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
@@ -189,6 +189,14 @@ function Review({ cid }: { cid: string }) {
         <Select id="f-status" label="Status" value={status} onChange={filterBy(setStatus)} all="All statuses" options={Object.entries(STATUS_WORD)} />
         <Select id="f-shop" label="Shop" value={shop} onChange={filterBy(setShop)} all="All shops" options={filters.shops.map((s) => [s, s])} />
         <Select id="f-unit" label="Unit" value={unit} onChange={filterBy(setUnit)} all="All units" options={filters.units.map((s) => [s, s])} />
+        <div>
+          <label htmlFor="f-sort" className="mb-1 block text-sm font-medium">Order</label>
+          <select id="f-sort" className="field sm:w-auto sm:min-w-[240px]" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+            <option value="impact_desc">Biggest amount first</option>
+            <option value="impact_asc">Smallest amount first</option>
+            <option value="score_desc">Most likely real first (AI rating)</option>
+          </select>
+        </div>
       </div>
 
       {notice && <p role="status" className="mt-4 font-medium text-confirmed">{notice}</p>}
@@ -236,6 +244,7 @@ function Review({ cid }: { cid: string }) {
                   <p className="num font-bold text-money">{money(f.impact)}</p>
                 </div>
                 <p className="mt-2">{f.reason}</p>
+                <p className="mt-1 text-sm text-muted">AI rating: <AiRating score={f.ai_score} /></p>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <span className={`font-medium ${f.status === "dismissed" ? "text-dismissed" : f.status === "open" ? "" : "text-confirmed"}`}>{STATUS_WORD[f.status] ?? f.status}</span>
                   <Link href={`/review/${f.id}`} className={f.status === "open" ? "btn-primary btn-sm" : "btn-secondary btn-sm"}>{f.status === "open" ? "Review" : "View"}</Link>
@@ -266,8 +275,11 @@ function Review({ cid }: { cid: string }) {
                 <th scope="col" className="th">Shop</th>
                 <th scope="col" className="th">Unit</th>
                 <th scope="col" className="th">What we found</th>
-                <th scope="col" className="th text-right" aria-sort={sort === "impact_desc" ? "descending" : "ascending"}>
-                  <button className="min-h-[40px] font-medium" onClick={() => setSort(sort === "impact_desc" ? "impact_asc" : "impact_desc")}>Impact {sort === "impact_desc" ? "↓" : "↑"}</button>
+                <th scope="col" className="th text-right" aria-sort={sort === "impact_desc" ? "descending" : sort === "impact_asc" ? "ascending" : undefined}>
+                  <button className="min-h-[40px] font-medium" onClick={() => setSort(sort === "impact_desc" ? "impact_asc" : "impact_desc")}>Impact {sort === "impact_desc" ? "↓" : sort === "impact_asc" ? "↑" : ""}</button>
+                </th>
+                <th scope="col" className="th" aria-sort={sort === "score_desc" ? "descending" : undefined}>
+                  <button className="min-h-[40px] font-medium" onClick={() => setSort("score_desc")} title="How likely the AI thinks this is a real issue">AI rating {sort === "score_desc" ? "↓" : ""}</button>
                 </th>
                 <th scope="col" className="th">Status</th>
                 <th scope="col" className="th"><span className="sr-only">Action</span></th>
@@ -287,6 +299,7 @@ function Review({ cid }: { cid: string }) {
                   <td className="td num whitespace-nowrap">{f.unit}</td>
                   <td className="td max-w-[68ch]">{f.reason}</td>
                   <td className="td num whitespace-nowrap text-right text-money">{money(f.impact)}</td>
+                  <td className="td whitespace-nowrap text-sm"><AiRating score={f.ai_score} /></td>
                   <td className={`td whitespace-nowrap font-medium ${f.status === "dismissed" ? "text-dismissed" : f.status === "open" ? "" : "text-confirmed"}`}>{STATUS_WORD[f.status] ?? f.status}</td>
                   <td className="td text-right"><Link href={`/review/${f.id}`} className={f.status === "open" ? "btn-primary btn-sm" : "btn-secondary btn-sm"}>{f.status === "open" ? "Review" : "View"}</Link></td>
                 </tr>
@@ -296,7 +309,7 @@ function Review({ cid }: { cid: string }) {
               <tr className="border-t-2 border-line-strong">
                 <td className="td font-bold" colSpan={5}>{list.flags.length} {list.flags.length === 1 ? "flag" : "flags"} shown</td>
                 <td className="td num whitespace-nowrap text-right font-bold text-money">{money(list.flags.reduce((n, f) => n + Number(f.impact || 0), 0))}</td>
-                <td className="td" colSpan={2} />
+                <td className="td" colSpan={3} />
               </tr>
             </tfoot>
           </table>
@@ -373,4 +386,10 @@ function Select({ id, label, value, onChange, all, options }: { id: string; labe
       </select>
     </div>
   );
+}
+
+function AiRating({ score }: { score: number | null }) {
+  const r = aiRating(score);
+  const tone = r.tone === "good" ? "text-confirmed" : r.tone === "low" ? "text-danger" : "text-muted";
+  return <span className={tone}><span className="num font-bold">{r.pct}</span>{r.tone !== "none" ? ` · ${r.words}` : " · not rated"}</span>;
 }

@@ -11,8 +11,8 @@ def run(ctx: Context) -> list[FlagDraft]:
     both = str(ctx.config.get("repeat_condition", "or")).lower() == "and"
     out: list[FlagDraft] = []
     for (unit, code), entries in history(ctx.invoices).items():
-        if code in exclude:
-            continue
+        if code in exclude or code.startswith("000-"):
+            continue  # routine work (system 000: PM services and inspections) repeats on purpose
         seen_repairs: set[str] = set()
         for i, (inv, ln) in enumerate(entries):
             if inv.id in seen_repairs:

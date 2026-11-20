@@ -34,6 +34,12 @@ test("upload three invoices, fix the odometer, mark as checked", async ({ page }
   await odometer.press("Enter");
   await expect(page.getByText("Saved").first()).toBeVisible();
 
+  // Every other field still marked Check has to be confirmed one by one before the invoice can be marked checked.
+  const looksRight = page.getByRole("button", { name: /looks right$/ });
+  for (let i = 0; i < 60 && (await looksRight.count()) > 0; i++) {
+    await looksRight.first().click();
+    await page.waitForTimeout(300);
+  }
   await page.getByRole("button", { name: "Mark as checked" }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Checked");
   await expect(page.getByTestId("next-invoice")).toBeVisible();

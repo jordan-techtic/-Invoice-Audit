@@ -28,15 +28,20 @@ def test_bulk_check_marks_many_and_updates_uploads(admin_client, world):
     cid = world["a"]
     invs, ups = seed(admin_client, cid, 4)
     ids = [i["id"] for i in invs]
+    blocked = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": ids[:3]}).json()
+    assert blocked == {"checked": 0, "already_checked": 0, "blocked": 3, "skipped": 0}   # each has a field marked Check: nothing waved through
+    for i in ids[:3]:                                                                       # the analyst looks at the image and confirms it
+        assert admin_client.post(f"/clients/{cid}/invoices/{i}/fields/confirm", json={"field": "odometer"}).json()["fields_to_check"] == 0
     r = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": ids[:3]}).json()
-    assert r == {"checked": 3, "already_checked": 0, "skipped": 0}
+    assert r == {"checked": 3, "already_checked": 0, "blocked": 0, "skipped": 0}
     now = {i["id"]: i for i in admin_client.get(f"/clients/{cid}/invoices").json()}
     assert [now[i]["review_status"] for i in ids] == ["reviewed"] * 3 + ["needs_review"] and now[ids[0]]["fields_to_check"] == 0
-    assert admin_client.get(f"/clients/{cid}/invoices/{ids[0]}").json()["header"]["odometer"]["needs_review"] is False
+    odo = admin_client.get(f"/clients/{cid}/invoices/{ids[0]}").json()["header"]["odometer"]
+    assert odo["needs_review"] is False and odo["confidence"] == 0.5   # confirmed, and the low score stays visible
     statuses = {u["id"]: u["status"] for u in admin_client.get(f"/clients/{cid}/uploads").json()}
     assert [statuses[u["id"]] for u in ups[::-1]] == ["done"] * 3 + ["needs_review"]   # invoices are listed newest first; an upload is done once its invoice is checked
     again = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": ids}).json()
-    assert again == {"checked": 1, "already_checked": 3, "skipped": 0}              # safe to repeat
+    assert again == {"checked": 0, "already_checked": 3, "blocked": 1, "skipped": 0}   # safe to repeat; the 4th still needs its field looked at
     rows = admin_client.get(f"/admin/audit-log?client_id={cid}&action=edit&limit=50").json()["rows"]
     assert any(x["detail"].get("op") == "bulk_mark_checked" and x["detail"]["count"] == 3 for x in rows)
 
@@ -45,6 +50,7 @@ def test_bulk_check_ignores_unknown_and_other_clients_ids_and_validates_size(adm
     a, b = world["a"], world["b"]
     mine, _ = seed(admin_client, a, 1, "A")
     theirs, _ = seed(admin_client, b, 1, "Z")
+    admin_client.post(f"/clients/{a}/invoices/{mine[0]['id']}/fields/confirm", json={"field": "odometer"})
     r = admin_client.post(f"/clients/{a}/invoices/bulk-check", json={"ids": [mine[0]["id"], theirs[0]["id"], str(uuid.uuid4())]}).json()
     assert r["checked"] == 1 and r["skipped"] == 2
     assert next(i for i in admin_client.get(f"/clients/{b}/invoices").json() if i["id"] == theirs[0]["id"])["review_status"] == "needs_review"   # B untouched

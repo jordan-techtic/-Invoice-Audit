@@ -2,7 +2,9 @@
 
 from decimal import Decimal
 
-from ..types import Context, FlagDraft, money
+import statistics
+
+from ..types import Context, FlagDraft, InvoiceView, _labour, money, parts_amount
 
 
 def _line_gap(ln) -> Decimal | None:
@@ -27,6 +29,59 @@ def _line_gap(ln) -> Decimal | None:
         return max(ln.line_total - max(cands), Decimal(0))      # over-billing only: a total below the expected amount is not money owed back
     short = [c - ln.line_total for c in cands if c - ln.line_total > 0]
     return min(short) if len(short) == len(cands) else Decimal(0)
+
+
+def _bases(inv: InvoiceView) -> dict[str, Decimal]:
+    """What tax could be charged on: the parts only, or parts and labour (some states tax labour)."""
+    parts = sum((parts_amount(l) for l in inv.lines), Decimal(0))
+    labour = sum((_labour(l) or Decimal(0) for l in inv.lines), Decimal(0))
+    return {"parts": parts, "parts_and_labour": parts + labour}
+
+
+def _tax_rate_flags(ctx: Context, tol: Decimal, already: set[str]) -> list[FlagDraft]:
+    """Tax charged at more than the shop's usual rate. The usual rate comes from the shop's OTHER invoices, so the invoice
+    under test never sets its own baseline; the shop's habit (parts only, or parts and labour) is learned the same way."""
+    need = int(ctx.config.get("tax_min_invoices", 3))
+    slack = Decimal(str(ctx.config.get("tax_rate_tolerance_pct", 0.25))) / 100
+    by_shop: dict[str, list[tuple[InvoiceView, dict[str, Decimal]]]] = {}
+    for inv in ctx.invoices:
+        if inv.shop_key and inv.tax is not None and inv.tax > 0 and inv.lines:
+            b = _bases(inv)
+            if b["parts"] > 0:
+                by_shop.setdefault(inv.shop_key, []).append((inv, b))
+    out: list[FlagDraft] = []
+    for shop, items in by_shop.items():
+        if len(items) <= need:
+            continue
+        for inv, b in items:
+            if inv.id in already:
+                continue  # its totals already don't add up; one maths flag per invoice
+            others = [(i, bb) for i, bb in items if i.id != inv.id]
+            best = None
+            for basis in ("parts", "parts_and_labour"):
+                rates = [i.tax / bb[basis] for i, bb in others if bb[basis] > 0]
+                if len(rates) < need:
+                    continue
+                med = Decimal(str(statistics.median(rates)))
+                spread = Decimal(str(statistics.median([abs(r - med) for r in rates])))
+                if best is None or spread < best[2]:
+                    best = (basis, med, spread)
+            if best is None:
+                continue
+            basis, usual, _ = best
+            charged_rate = inv.tax / b[basis]
+            expected = (usual * b[basis]).quantize(Decimal("0.01"))
+            over = inv.tax - expected
+            if charged_rate - usual > slack and over > tol:
+                out.append(FlagDraft(
+                    type="math_error", invoice_id=inv.id, line_id=None, impact=over.quantize(Decimal("0.01")), dedupe_key=f"math_tax:{inv.id}",
+                    evidence={"check": "tax_rate", "tax": float(inv.tax), "taxed_on": basis, "taxable_amount": float(b[basis]),
+                              "charged_rate_pct": round(float(charged_rate) * 100, 2), "usual_rate_pct": round(float(usual) * 100, 2),
+                              "shop_invoices": len(others), "difference": float(over)},
+                    template_reason=(f"Tax was charged at {float(charged_rate) * 100:.2f}% where this shop usually charges {float(usual) * 100:.2f}%. "
+                                     f"Possible over-charge of {money(over)}."),
+                ))
+    return out
 
 
 def run(ctx: Context) -> list[FlagDraft]:
@@ -74,4 +129,5 @@ def run(ctx: Context) -> list[FlagDraft]:
                           "total": float(inv.total) if inv.total is not None else None},
                 template_reason=f"On this invoice {what}. Possible maths error of {money(impact)}.",
             ))
+    out += _tax_rate_flags(ctx, tol, {d.invoice_id for d in out if d.line_id is None})
     return out

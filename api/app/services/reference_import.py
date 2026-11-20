@@ -350,6 +350,8 @@ SETTING_RULES: dict[str, tuple[str, float, float, str]] = {
     "parts_min_samples": ("int", 1, 1000, "Parts samples needed"),
     "math_tolerance": ("num", 0, 1000, "Maths tolerance ($)"),
     "duplicate_window_days": ("int", 0, 365, "Duplicate window (days)"),
+    "tax_min_invoices": ("int", 1, 1000, "Invoices needed for a shop's tax rate"),
+    "tax_rate_tolerance_pct": ("num", 0, 100, "Tax rate tolerance (percentage points)"),
     "severity_high_dollars": ("num", 0, 10_000_000, "High severity from ($)"),
     "severity_medium_dollars": ("num", 0, 10_000_000, "Medium severity from ($)"),
 }

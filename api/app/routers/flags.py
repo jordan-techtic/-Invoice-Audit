@@ -71,7 +71,10 @@ def list_flags(client_id: uuid.UUID, type: str | None = None, status: str | None
         q = q.where(Invoice.shop_name_raw == shop)
     if unit:
         q = q.where(Invoice.unit_number == unit)
-    q = q.order_by(Flag.estimated_dollar_impact.asc() if sort == "impact_asc" else Flag.estimated_dollar_impact.desc(), Flag.created_at)
+    if sort == "score_desc":   # the AI's view of how likely each flag is a real issue; flags it did not score go last
+        q = q.order_by(Flag.ai_score.desc().nulls_last(), Flag.estimated_dollar_impact.desc(), Flag.created_at)
+    else:
+        q = q.order_by(Flag.estimated_dollar_impact.asc() if sort == "impact_asc" else Flag.estimated_dollar_impact.desc(), Flag.created_at)
     rows = db.execute(q).all()
 
     # Totals are plain sums of flag amounts, the same rule the report uses, so the screen and the report always agree.

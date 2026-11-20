@@ -39,7 +39,7 @@ export interface InvoiceDetail {
 
 export type FlagType = "labour_over_benchmark" | "repeat_repair" | "warranty_eligible" | "parts_price_outlier" | "duplicate" | "math_error";
 export interface Flag {
-  id: string; type: FlagType; severity: string | null; impact: number; reason: string; status: string;
+  id: string; type: FlagType; severity: string | null; impact: number; reason: string; status: string; ai_score: number | null;
   shop: string | null; unit: string | null; invoice_id: string; invoice_number: string | null; line_description: string | null;
 }
 export type FlagStatus = "open" | "accepted" | "edited" | "dismissed";
@@ -49,7 +49,7 @@ export interface FlagList {
 }
 export interface FlagDetail {
   id: string; type: FlagType; severity: string | null; impact: number; original_impact: number;
-  reason: string; original_reason: string; status: FlagStatus; dismiss_reason: DismissReason | null; note: string | null;
+  reason: string; original_reason: string; status: FlagStatus; ai_score: number | null; dismiss_reason: DismissReason | null; note: string | null;
   reviewed_by: string | null; reviewed_at: string | null; evidence_lines: string[];
   invoice: { id: string; invoice_number: string | null; invoice_date: string | null; shop: string | null; unit: string | null;
     vin: string | null; odometer: number | string | null; total: number | string | null; pages: { n: number; url: string }[]; flagged_page: number | null };
@@ -98,6 +98,15 @@ export interface BenchmarkJobsResult {
   rows: number; imported: number;
   merged: { row: number; job: string; into: string; reason: string }[];
   skipped: { row: number; job: string; reason: string }[];
+}
+
+/** The AI's 0–1 view of how likely a flag is a real issue, in words. */
+export function aiRating(score: number | null | undefined): { pct: string; words: string; tone: "good" | "mid" | "low" | "none" } {
+  if (score === null || score === undefined) return { pct: "–", words: "Not rated", tone: "none" };
+  const pct = `${Math.round(score * 100)}%`;
+  if (score >= 0.7) return { pct, words: "Likely a real issue", tone: "good" };
+  if (score >= 0.4) return { pct, words: "Unsure", tone: "mid" };
+  return { pct, words: "Possibly a misread or innocent", tone: "low" };
 }
 
 export class ApiError extends Error {
@@ -216,6 +225,8 @@ export const api = {
     const f = new FormData(); f.append("file", file);
     return request<{ imported: number }>(`/clients/${cid}/benchmarks/import`, { method: "POST", body: f });
   },
+  confirmField: (cid: string, id: string, field: string, lineId?: string) =>
+    request<{ ok: boolean; fields_to_check: number }>(`/clients/${cid}/invoices/${id}/fields/confirm`, json("POST", { field, line_id: lineId })),
   bulkCheck: (cid: string, ids: string[]) => request<{ checked: number; already_checked: number; skipped: number; blocked?: { id: string; fields: string[]; reason: string }[] }>(`/clients/${cid}/invoices/bulk-check`, json("POST", { ids })),
   bulkDelete: (cid: string, ids: string[]) => request<{ deleted: number; skipped: number }>(`/clients/${cid}/invoices/bulk-delete`, json("POST", { ids })),
   markChecked: (cid: string, id: string, confirmAsPrinted = false) =>

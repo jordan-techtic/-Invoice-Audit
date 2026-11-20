@@ -181,7 +181,7 @@ def test_warranty_import_reads_all_35_dataset_components(admin_client, world):
     body = r.json()
     assert body["rows"] == 35 and body["skipped"] == []
     assert body["added"] + body["updated"] + len(body["merged"]) == 35   # every component is accounted for
-    assert {m["component"] for m in body["merged"]} == {"nox_sensor", "egr_cooler"}   # share a job code, same terms, with def_doser / egr_valve
+    assert body["merged"] == [] and body["added"] + body["updated"] == 35   # each component has its own job code
     rules = {x["component"]: x for x in admin_client.get(f"/clients/{cid}/warranty-rules").json()}
     battery = next(x for n, x in rules.items() if n.startswith("Battery"))
     assert battery["months"] == 18 and battery["miles"] is None and battery["covers"] == "parts+labour"     # 'unlimited'
@@ -447,8 +447,7 @@ def test_benchmark_jobs_file_from_the_dataset_imports_by_class(admin_client, wor
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["rows"] == 139 and body["imported"] + len(body["merged"]) + len(body["skipped"]) == 139
-    assert body["imported"] > 100 and body["skipped"]                                    # most map; some need a person to decide
-    assert all(s["reason"] for s in body["skipped"])
+    assert body["imported"] == 139 and body["skipped"] == [] and body["merged"] == []   # every job and class has its own value
     rows = admin_client.get(f"/clients/{cid}/benchmarks").json()
     assert len(rows) == body["imported"] and {x["vehicle_class"] for x in rows} == {"tractor", "trailer", "box_truck", "van"}
     assert {x["source"] for x in rows} == {"licensed:jobs"}
