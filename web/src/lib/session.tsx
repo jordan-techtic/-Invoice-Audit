@@ -36,7 +36,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         let saved: string | null = null;
         try { saved = localStorage.getItem(KEY); } catch { /* storage unavailable */ }
         setClients(list);
-        setClientId(list.some((c) => c.id === saved) ? saved : null);
+        // Use the last client this browser worked on; otherwise start on the first one so the app is never empty.
+        setClientId(list.some((c) => c.id === saved) ? saved : list[0]?.id ?? null);
         setUser(me);
       } catch (err) {
         if (live) setError(err instanceof Error ? err.message : "Couldn't load the app.");

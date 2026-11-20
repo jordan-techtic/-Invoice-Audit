@@ -17,20 +17,13 @@ test("upload three invoices, fix the odometer, mark as checked", async ({ page }
   await expect(page.getByRole("heading", { name: "Audit overview" })).toBeVisible();
   await expect(page.getByTestId("step-bar")).toBeVisible();
 
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Upload" }).click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Invoices" }).click();
   await expect(page.getByRole("heading", { name: "Upload invoices" })).toBeVisible();
   await page.locator("#file-input").setInputFiles(files);
 
-  for (const f of files) {
-    const row = page.getByRole("row").filter({ hasText: f.name });
-    await expect(row).toBeVisible();
-    await expect(row.getByText("Needs review", { exact: false }).first()).toBeVisible({ timeout: 60_000 });
-  }
-  await expect(page.locator('tr[data-status="queued"], tr[data-status="reading"]')).toHaveCount(0);
-  await expect(page.getByRole("link", { name: "Check invoices" }).first()).toBeVisible();
+  // The file list is hidden once files are read; the "To check" tab count shows when all of them are in.
+  await expect(page.getByRole("tab", { name: new RegExp(`To check\\s*${files.length}`) })).toBeVisible({ timeout: 60_000 });
 
-  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Review" }).click();
-  await page.getByRole("navigation", { name: "Review sections" }).getByRole("link", { name: "Invoices" }).click();
   await page.getByRole("tab", { name: /To check/ }).click();
   await page.getByRole("link").filter({ hasText: /./ }).and(page.locator("tbody a")).first().click();
 

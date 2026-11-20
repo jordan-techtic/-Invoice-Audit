@@ -10,9 +10,10 @@ test("create a report, download the PDF and open the public link", async ({ page
 
   await uiLogin(page);
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Reports" }).click();
-  await page.getByRole("button", { name: "Create report" }).first().click();
-  await page.getByRole("button", { name: "Create report" }).last().click();
-  const row = page.locator("tbody tr").first();
+  // The button opens a small pop-up; confirming creates the report while a loader shows.
+  await page.getByRole("button", { name: /Create report/ }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "Create report" }).click();
+  const row = page.getByTestId("report-versions").locator("li").first();
   await expect(row).toContainText(/Version \d+/);
 
   const pdfHref = await row.getByRole("link", { name: "Download PDF" }).getAttribute("href");
@@ -20,11 +21,11 @@ test("create a report, download the PDF and open the public link", async ({ page
   expect(pdf.status()).toBe(200);
   expect(pdf.headers()["content-type"]).toContain("application/pdf");
 
-  await row.getByRole("link", { name: "Open dashboard" }).click();
+  await row.getByRole("link", { name: "Open report" }).click();
   await expect(page.getByTestId("recoverable").or(page.getByTestId("headline")).first()).toBeVisible();
   await page.goBack();
 
-  await page.locator("tbody tr").first().getByRole("button", { name: "Copy link" }).click();
+  await page.getByTestId("report-versions").locator("li").first().getByRole("button", { name: "Copy link" }).click();
   await expect(page.getByText("Link copied").first()).toBeVisible();
   const shared = await page.evaluate(() => navigator.clipboard.readText());
   const token = new URL(shared, "http://localhost:3000").pathname.split("/").pop()!;

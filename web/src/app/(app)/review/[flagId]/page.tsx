@@ -56,7 +56,9 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
     setPanel(p);
   }, [d]);
 
-  const refreshProgress = useProgress()?.refresh;
+  const progress = useProgress();
+  const refreshProgress = progress?.refresh;
+  const blocked = (progress?.needReview ?? 0) > 0 || !!progress?.checksStale;
   const go = useCallback((id: string | undefined) => router.push(id ? `/review/${id}` : "/review"), [router]);
   const idx = ids.indexOf(fid);
 
@@ -75,10 +77,15 @@ function Detail({ cid, fid }: { cid: string; fid: string }) {
       setPanel(null);
       refreshProgress?.();
       if (action === "reopen") { setD(x); idsRef.current = idsRef.current.includes(fid) ? idsRef.current : [...idsRef.current, fid]; setIds(idsRef.current); }
-      else advance();
+      else {
+        // That was the last open flag and nothing else blocks the report: go straight to it.
+        const left = await api.flags(cid, { status: "open" }).then((l) => l.count, () => null);
+        if (left === 0 && !blocked) { router.push("/reports"); return; }
+        advance();
+      }
     } catch (e) { setError(e instanceof Error ? e.message : "That didn't save. Try again."); }
     finally { setBusy(false); }
-  }, [cid, fid, advance, refreshProgress]);
+  }, [cid, fid, advance, refreshProgress, blocked, router]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

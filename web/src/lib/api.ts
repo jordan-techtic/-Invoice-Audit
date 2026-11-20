@@ -66,10 +66,6 @@ export interface ReportItem {
   id: string; version: number; generated_at: string; recoverable: number; flag_count: number;
   expires_at: string | null; revoked: boolean; expired: boolean; share_url: string | null;
 }
-export interface AuditRow {
-  id: string; created_at: string; user_name: string | null; client_name: string | null; action: string;
-  object_type: string | null; object_id: string | null; detail: unknown; ip: string | null;
-}
 export interface FlagRun {
   id: string; status: "queued" | "running" | "done" | "failed"; started_at: string | null; finished_at: string | null;
   summary: { flags: number; by_type: Record<string, number>; notes: string[] } | null; error: string | null;
@@ -149,11 +145,6 @@ export const api = {
   report: (cid: string, rid: string) => request<Snapshot>(`/clients/${cid}/reports/${rid}`),
   revokeReport: (cid: string, rid: string) => request<unknown>(`/clients/${cid}/reports/${rid}/revoke`, { method: "POST" }),
   publicReport: (token: string) => request<Snapshot>(`/public/reports/${token}`),
-  auditLog: (q: { client_id?: string; action?: string; limit: number; offset: number }) => {
-    const sp = new URLSearchParams();
-    Object.entries(q).forEach(([k, v]) => { if (v !== undefined && v !== "") sp.set(k, String(v)); });
-    return request<{ total: number; rows: AuditRow[] }>(`/admin/audit-log?${sp}`);
-  },
   auditComplete: (cid: string) => request<unknown>(`/clients/${cid}/audit-complete`, { method: "POST" }),
   deleteRaw: (cid: string) => request<unknown>(`/clients/${cid}/delete-raw-files`, json("POST", { confirm: "DELETE" })),
   deleteEverything: (cid: string, name: string) => request<unknown>(`/clients/${cid}/delete-everything`, json("POST", { confirm: name })),

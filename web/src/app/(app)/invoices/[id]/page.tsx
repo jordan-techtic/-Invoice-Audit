@@ -47,7 +47,10 @@ function Detail({ cid, id }: { cid: string; id: string }) {
   const [recheck, setRecheck] = useState<{ busy?: boolean; text?: string; error?: string }>({});
   const pending = useRef<Set<Promise<unknown>>>(new Set());
   const [nextId, setNextId] = useState<string | null | undefined>(undefined); // undefined = not looked up yet
-  const refreshProgress = useProgress()?.refresh;
+  const progress = useProgress();
+  const refreshProgress = progress?.refresh;
+  // After the last invoice is checked the audit checks start on their own.
+  const [auto, setAuto] = useState<{ state: "idle" | "running" | "done" | "error"; flags?: number; error?: string }>({ state: "idle" });
 
   const load = useCallback(async () => {
     try { setData(await api.invoice(cid, id)); setError(null); }
@@ -92,8 +95,16 @@ function Detail({ cid, id }: { cid: string; id: string }) {
       await api.markChecked(cid, id);
       await load();
       const left = await api.invoices(cid, "needs_review").catch(() => []);
-      setNextId(left.find((r) => r.id !== id)?.id ?? null);
+      const next = left.find((r) => r.id !== id)?.id ?? null;
+      setNextId(next);
       refreshProgress?.();
+      if (!next && progress) {
+        setAuto({ state: "running" });
+        progress.runChecks().then(
+          (flags) => setAuto({ state: "done", flags }),
+          (e) => setAuto({ state: "error", error: e instanceof Error ? e.message : "The checks didn't finish. Run them again from step 2." }),
+        );
+      }
     } catch (e) {
       setMarkError(e instanceof Error ? e.message : "Couldn't mark this invoice as checked. Try again.");
     } finally {
@@ -168,8 +179,25 @@ function Detail({ cid, id }: { cid: string; id: string }) {
                 <Link href={`/invoices/${nextId}`} className="btn-primary btn-lg mt-3 w-full">Check next invoice<IconArrow /></Link>
               ) : (
                 <>
-                  <p className="mt-1">That was the last invoice to check. Next: run the audit checks.</p>
-                  <Link href="/review?run=1" className="btn-primary btn-lg mt-3 w-full">Go to step 3 · Run checks<IconArrow /></Link>
+                  <p className="mt-1">That was the last invoice to check.</p>
+                  {auto.state === "running" && (
+                    <p role="status" className="mt-3 flex items-center gap-3 font-medium">
+                      <span aria-hidden className="h-5 w-5 shrink-0 animate-spin rounded-full border-[3px] border-sunken border-t-primary" />
+                      Running the audit checks…
+                    </p>
+                  )}
+                  {auto.state === "done" && (
+                    <>
+                      <p role="status" className="mt-3 font-medium">Checks finished. {auto.flags} {auto.flags === 1 ? "flag" : "flags"} found.</p>
+                      <Link href="/review" className="btn-primary btn-lg mt-3 w-full">Go to step 2 · Review flags<IconArrow /></Link>
+                    </>
+                  )}
+                  {auto.state === "error" && (
+                    <>
+                      <p role="alert" className="mt-3 text-danger">{auto.error}</p>
+                      <Link href="/review" className="btn-primary btn-lg mt-3 w-full">Go to step 2<IconArrow /></Link>
+                    </>
+                  )}
                 </>
               )}
             </div>

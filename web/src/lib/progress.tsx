@@ -1,15 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { api, type Flag, type FlagType, type InvoiceSummary, type ReportItem, type UploadRow } from "./api";
 
 /** Where the active client's audit stands, and the one thing to do next. Computed from existing list endpoints. */
 
 export type StepState = "done" | "current" | "todo";
-export type StepKey = "upload" | "check" | "run" | "review" | "report";
+export type StepKey = "check" | "review" | "report";
 export interface Step { key: StepKey; n: number; label: string; short: string; href: string; state: StepState; detail: string }
-export interface NextAction { step: StepKey | "finished"; title: string; text: string; href: string; cta: string }
+export interface NextAction { step: "upload" | "check" | "run" | "review" | "report" | "finished"; title: string; text: string; href: string; cta: string }
 
 export interface Progress {
   loading: boolean;
@@ -25,6 +25,10 @@ export interface Progress {
   next: NextAction;
   refresh: () => Promise<void>;
   markChecksRun: () => void;
+  /** True while the audit checks are running (started from any page). */
+  running: boolean;
+  /** Runs the audit checks and resolves with the number of flags found. A run already in progress is shared, never doubled. */
+  runChecks: () => Promise<number>;
 }
 
 const RUN_KEY = (cid: string) => `ia.checksRun.${cid}`;
@@ -54,9 +58,10 @@ export function compute(raw: Raw, lastRun: string | null) {
     if (f.status !== "dismissed") t.amount += num(f.impact);
     types.set(f.type, t);
   }
-  const newestUpload = uploads.reduce<string | null>((m, u) => (!m || u.created_at > m ? u.created_at : m), null);
+  // Compare real times, not strings: the server sends "+05:30"-style offsets while the last-run time is stored in UTC.
+  const newestUpload = uploads.reduce((m, u) => Math.max(m, Date.parse(u.created_at) || 0), 0);
   const checksRun = flags.length > 0 || !!lastRun;
-  const checksStale = !!lastRun && !!newestUpload && newestUpload > lastRun;
+  const checksStale = !!lastRun && newestUpload > (Date.parse(lastRun) || 0);
   const latestReport = reports.reduce<ReportItem | null>((m, r) => (!m || r.version > m.version ? r : m), null);
   const firstOpenFlag = [...flags].filter((f) => f.status === "open").sort((a, b) => num(b.impact) - num(a.impact))[0]?.id ?? null;
   const firstInvoiceToCheck = invoices.find((i) => i.review_status === "needs_review")?.id ?? null;
@@ -68,35 +73,31 @@ export function compute(raw: Raw, lastRun: string | null) {
   const reportDone = reviewDone && !!latestReport;
 
   const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-  const raw5: Omit<Step, "state">[] = [
-    { key: "upload", short: "Upload", n: 1, label: "Upload invoices", href: "/upload",
-      detail: filesBusy ? `${plural(filesBusy, "file")} being read` : invoices.length ? `${plural(invoices.length, "invoice")} read` : "No files yet" },
-    { key: "check", short: "Check", n: 2, label: "Check invoices", href: "/invoices?status=needs_review",
-      detail: !invoices.length ? "Waiting for invoices" : needReview ? `${plural(needReview, "invoice")} to check` : "All checked" },
-    { key: "run", short: "Run checks", n: 3, label: "Run checks", href: "/review",
-      detail: checksStale ? "New files since last run" : checksRun ? `${plural(flags.length, "flag")} found` : "Not run yet" },
-    { key: "review", short: "Review", n: 4, label: "Review flags", href: "/review",
-      detail: !checksRun ? "Waiting for checks" : flagsOpen ? `${plural(flagsOpen, "flag")} open` : "All reviewed" },
-    { key: "report", short: "Report", n: 5, label: "Create report", href: "/reports",
+  const raw3: Omit<Step, "state">[] = [
+    { key: "check", short: "Upload & check", n: 1, label: "Upload and check invoices", href: "/invoices",
+      detail: filesBusy ? `${plural(filesBusy, "file")} being read` : !invoices.length ? "No files yet" : needReview ? `${plural(needReview, "invoice")} to check` : `${plural(invoices.length, "invoice")}, all checked` },
+    { key: "review", short: "Review flags", n: 2, label: "Review flags", href: "/review",
+      detail: checksStale ? "New files since last run" : !checksRun ? "Checks not run yet" : flagsOpen ? `${plural(flagsOpen, "flag")} open` : `${plural(flags.length, "flag")}, all reviewed` },
+    { key: "report", short: "Report", n: 3, label: "Create report", href: "/reports",
       detail: latestReport ? `Version ${latestReport.version} created` : "No report yet" },
   ];
-  const done = [uploadDone, checkDone, runDone, reviewDone, reportDone];
+  const done = [checkDone, reviewDone, reportDone];
   const firstOpen = done.findIndex((d) => !d);
-  const steps: Step[] = raw5.map((s, i) => ({ ...s, state: done[i] ? "done" : i === firstOpen ? "current" : "todo" }));
+  const steps: Step[] = raw3.map((s, i) => ({ ...s, state: done[i] ? "done" : i === firstOpen ? "current" : "todo" }));
 
   let next: NextAction;
   if (!invoices.length && !filesBusy) {
-    next = { step: "upload", title: "Upload this client's invoices", text: "Drop PDFs, scans or phone photos. The AI reads them for you.", href: "/upload", cta: "Upload invoices" };
+    next = { step: "upload", title: "Upload this client's invoices", text: "Drop PDFs, scans or phone photos. The AI reads them for you.", href: "/invoices", cta: "Upload invoices" };
   } else if (filesBusy) {
-    next = { step: "upload", title: "Invoices are being read", text: `${plural(filesBusy, "file")} still being read. You can start checking the ones that are ready.`, href: "/upload", cta: "See progress" };
+    next = { step: "upload", title: "Invoices are being read", text: `${plural(filesBusy, "file")} still being read. You can start checking the ones that are ready.`, href: "/invoices", cta: "See progress" };
   } else if (needReview) {
     next = { step: "check", title: `Check ${plural(needReview, "invoice")}`, text: "The AI was unsure of some values. Compare them with the page image and fix them.", href: firstInvoiceToCheck ? `/invoices/${firstInvoiceToCheck}` : "/invoices?status=needs_review", cta: "Check next invoice" };
   } else if (!checksRun || checksStale) {
-    next = { step: "run", title: checksStale ? "Run checks again" : "Run the audit checks", text: checksStale ? "New invoices arrived since the last run. Run checks so they are included." : "Six rules look for overbilling, repeats, warranty claims, duplicates and maths errors.", href: "/review?run=1", cta: "Run checks" };
+    next = { step: "run", title: checksStale ? "Run checks again" : "Run the audit checks", text: checksStale ? "New invoices arrived since the last run. The checks update on their own when you open step 2." : "Open step 2 and the checks run on their own. Six rules look for overbilling, repeats, warranty claims, duplicates and maths errors.", href: "/review", cta: "Go to step 2" };
   } else if (flagsOpen) {
     next = { step: "review", title: `Review ${plural(flagsOpen, "flag")}`, text: "Accept the real problems and dismiss the rest. Biggest amounts come first.", href: firstOpenFlag ? `/review/${firstOpenFlag}` : "/review", cta: "Review next flag" };
   } else if (!latestReport) {
-    next = { step: "report", title: "Create the client report", text: "Every flag is reviewed. Turn the accepted findings into a report and share link.", href: "/reports?create=1", cta: "Create report" };
+    next = { step: "report", title: "Create the client report", text: "Every flag is reviewed. Turn the accepted findings into a report and share link.", href: "/reports", cta: "Create report" };
   } else {
     next = { step: "finished", title: "Audit complete", text: "The report is ready. Share the link or download the PDF.", href: `/reports/${latestReport.id}`, cta: "Open report" };
   }
@@ -156,11 +157,30 @@ export function ProgressProvider({ cid, children }: { cid: string | null; childr
     setLastRun(now);
   }, [cid]);
 
+  const [running, setRunning] = useState(false);
+  const runRef = useRef<Promise<number> | null>(null);
+  const runChecks = useCallback((): Promise<number> => {
+    if (runRef.current) return runRef.current;
+    if (!cid) return Promise.reject(new Error("Choose a client first."));
+    setRunning(true);
+    const p = (async () => {
+      const { job_id } = await api.runFlags(cid);
+      for (;;) {
+        await new Promise((res) => setTimeout(res, 2000));
+        const r = await api.flagRun(cid, job_id);
+        if (r.status === "done") { markChecksRun(); await refresh(); return r.summary?.flags ?? 0; }
+        if (r.status === "failed") throw new Error(r.error || "The checks didn't finish. Run them again in a moment.");
+      }
+    })().finally(() => { runRef.current = null; setRunning(false); });
+    runRef.current = p;
+    return p;
+  }, [cid, markChecksRun, refresh]);
+
   const value = useMemo<Progress | null>(() => {
     if (!cid) return null;
     const empty: Raw = { uploads: [], invoices: [], flags: [], open: 0, confirmed: 0, reports: [] };
-    return { loading: raw === null, error, ...compute(raw ?? empty, lastRun), refresh, markChecksRun };
-  }, [cid, raw, error, lastRun, refresh, markChecksRun]);
+    return { loading: raw === null, error, ...compute(raw ?? empty, lastRun), refresh, markChecksRun, running, runChecks };
+  }, [cid, raw, error, lastRun, refresh, markChecksRun, running, runChecks]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

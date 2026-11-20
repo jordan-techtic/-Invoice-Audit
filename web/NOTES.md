@@ -17,6 +17,5 @@ Assumptions where the design plan was silent (one line each):
 - Flags and Invoices are tabs inside Review; the flags e2e test mocks the flags endpoints, and the settings page is built to the contract but not yet run against the real API.
 - Review nav goes to /review (flags, then Invoices tab); /flags redirects there. The open-flag list for J/K and "x of y" reuses the review filters saved in sessionStorage.
 - Report percent is read as already a percentage (4.5 means 4.5%).
-- Audit log link shows in the rail foot for admins only; the action filter lists common actions plus any seen in the loaded page.
 - Deleting dialogs use the native dialog element and require typing the confirm word or the exact client name.
 - The review and report e2e specs create their own data through the API and expect the Phase 4 backend.

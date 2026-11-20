@@ -36,7 +36,7 @@ function Overview({ name }: { name: string }) {
       {p.filesFailed > 0 && (
         <p role="alert" className="mt-4 flex items-center gap-2 rounded-md border border-danger bg-surface px-4 py-3 text-danger">
           <IconAlert /> {p.filesFailed} {p.filesFailed === 1 ? "file" : "files"} could not be read.
-          <Link href="/upload" className="btn-link">Retry on the Upload page</Link>
+          <Link href="/invoices" className="btn-link">Retry on the Invoices page</Link>
         </p>
       )}
 

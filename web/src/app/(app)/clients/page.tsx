@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, type Client } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { IconPlus } from "@/components/Icons";
 
 interface Counts { total: number; review: number }
 
@@ -15,6 +16,7 @@ export default function ClientsPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     let live = true;
@@ -26,6 +28,9 @@ export default function ClientsPage() {
     });
     return () => { live = false; };
   }, [clients]);
+
+  function openAdd() { setName(""); setError(null); dialog.current?.showModal(); }
+  function closeAdd() { setName(""); setError(null); }
 
   function pick(c: Client) {
     chooseClient(c);
@@ -41,6 +46,7 @@ export default function ClientsPage() {
       await api.addClient(name.trim());
       await refreshClients();
       setName("");
+      dialog.current?.close();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't add the client. Check the name and try again.");
     } finally {
@@ -50,12 +56,21 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <h1 className="text-xl">Clients</h1>
-      <p className="mt-1 max-w-prose text-muted">Step 0: choose the client whose invoices you are auditing. Everything after this (upload, review, report) is for that client only.</p>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0 max-w-prose">
+          <h1 className="text-xl">Clients</h1>
+          <p className="mt-1 text-muted">Choose the client whose invoices you are auditing. Everything after this (upload, review, report) is for that client only.</p>
+        </div>
+        {user.role === "admin" && (
+          <button className="btn-primary btn-lg w-full sm:w-auto" onClick={openAdd} aria-haspopup="dialog">
+            <IconPlus />Add client
+          </button>
+        )}
+      </div>
 
       {clients.length === 0 ? (
         <p className="mt-8 max-w-prose text-lg">
-          {user.role === "admin" ? "No clients yet. Add your first client below to start uploading invoices." : "No clients are assigned to you yet. Ask an admin to give you access."}
+          {user.role === "admin" ? "No clients yet. Use the Add client button to add your first client and start uploading invoices." : "No clients are assigned to you yet. Ask an admin to give you access."}
         </p>
       ) : (
         <div className="mt-8 overflow-x-auto rounded-lg border border-line bg-surface">
@@ -95,18 +110,22 @@ export default function ClientsPage() {
           </table>
         </div>
       )}
-
       {user.role === "admin" && (
-        <form onSubmit={add} className="card mt-10 max-w-[560px]" noValidate>
-          <h2 className="text-lg">Add client</h2>
-          <label htmlFor="client-name" className="mb-1 mt-3 block font-medium">Client name</label>
-          <div className="flex gap-3">
+        <dialog ref={dialog} onClose={closeAdd} onClick={(e) => { if (e.target === dialog.current) dialog.current?.close(); }}
+          className="w-[min(480px,92vw)] rounded-lg border border-line-strong bg-surface p-0 text-ink backdrop:bg-ink/40" aria-labelledby="add-client-title">
+          <form onSubmit={add} className="p-6" noValidate>
+            <h2 id="add-client-title" className="text-lg">Add client</h2>
+            <p className="mt-1 text-muted">Each client has its own invoices, flags and reports.</p>
+            <label htmlFor="client-name" className="mb-1 mt-4 block font-medium">Client name</label>
             <input id="client-name" className="field" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!error}
-              aria-describedby={error ? "client-error" : undefined} />
-            <button type="submit" className="btn-primary shrink-0" disabled={busy || !name.trim()}>{busy ? "Adding…" : "Add client"}</button>
-          </div>
-          {error && <p id="client-error" role="alert" className="mt-2 text-danger">{error}</p>}
-        </form>
+              aria-describedby={error ? "client-error" : undefined} autoComplete="off" autoFocus />
+            {error && <p id="client-error" role="alert" className="mt-2 text-danger">{error}</p>}
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <button type="button" className="btn-secondary" onClick={() => dialog.current?.close()}>Cancel</button>
+              <button type="submit" className="btn-primary" disabled={busy || !name.trim()}>{busy ? "Adding…" : "Add client"}</button>
+            </div>
+          </form>
+        </dialog>
       )}
     </div>
   );

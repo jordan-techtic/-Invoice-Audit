@@ -8,3 +8,4 @@ export const IconCheck = () => (<svg {...base} width={18} height={18}><path d="m
 export const IconAlert = () => (<svg {...base} width={18} height={18}><path d="M12 4 2.5 20h19zM12 10v4m0 3v.01" /></svg>);
 export const IconFile = () => (<svg {...base} width={32} height={32}><path d="M6 3h9l3 3v15H6zM14 3v4h4" /></svg>);
 export const IconArrow = () => (<svg {...base} width={18} height={18}><path d="M5 12h14m-5-5 5 5-5 5" /></svg>);
+export const IconPlus = () => (<svg {...base} width={20} height={20}><path d="M12 5v14M5 12h14" /></svg>);

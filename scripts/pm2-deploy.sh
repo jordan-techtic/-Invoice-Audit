@@ -27,8 +27,18 @@ if [[ ! -d api/.venv ]]; then
 fi
 api/.venv/bin/pip install -q -r api/requirements.txt
 
-echo "==> Database migrations"
+echo "==> Validate api/.env"
 cd api
+if ! .venv/bin/python -c "from app.config import get_settings; get_settings.cache_clear(); get_settings()"; then
+  echo ""
+  echo "Fix api/.env: with ENV=production you must set non-empty DATA_ENCRYPTION_KEY and JWT_SECRET"
+  echo "(not the REPLACE_WITH_ placeholders). Generate:"
+  echo '  DATA_ENCRYPTION_KEY=$(python3 -c "import base64,os;print(base64.urlsafe_b64encode(os.urandom(32)).decode())")'
+  echo '  JWT_SECRET=$(openssl rand -hex 32)'
+  exit 1
+fi
+
+echo "==> Database migrations"
 .venv/bin/alembic upgrade head
 .venv/bin/python -m app.seed
 cd "$ROOT"

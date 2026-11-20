@@ -6,8 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, money, DISMISS_WORD, REVIEW_QUERY_KEY, REVIEW_IDS_KEY, STATUS_WORD, TYPE_NAME, type DismissReason, type FlagList } from "@/lib/api";
 import NeedClient from "@/components/NeedClient";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import ReviewTabs from "@/components/ReviewTabs";
-import { IconArrow } from "@/components/Icons";
+import { IconArrow, IconCheck } from "@/components/Icons";
 import { useProgress } from "@/lib/progress";
 
 export default function ReviewPage() {
@@ -20,14 +19,12 @@ function Review({ cid }: { cid: string }) {
   const url = typeof window === "undefined" ? null : new URLSearchParams(window.location.search);
   const [type, setType] = useState(() => url?.get("type") ?? "");
   const [status, setStatus] = useState(() => (url?.has("status") ? url.get("status") ?? "" : "open"));
-  const autoRun = useRef(url?.get("run") === "1");
   const prog = useProgress();
   const [shop, setShop] = useState("");
   const [unit, setUnit] = useState("");
   const [sort, setSort] = useState<"impact_desc" | "impact_asc">("impact_desc");
   const [filters, setFilters] = useState<{ shops: string[]; units: string[] }>({ shops: [], units: [] });
   const [anyFlags, setAnyFlags] = useState<boolean | null>(null);
-  const [running, setRunning] = useState(false);
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -46,36 +43,38 @@ function Review({ cid }: { cid: string }) {
   useEffect(() => { load(); }, [load]);
 
   async function run() {
-    setRunning(true);
     setMessage(null);
     try {
-      const { job_id } = await api.runFlags(cid);
-      for (;;) {
-        await new Promise((r) => setTimeout(r, 2000));
-        const r = await api.flagRun(cid, job_id);
-        if (r.status === "done") {
-          prog?.markChecksRun();
-          const n = r.summary?.flags ?? 0;
-          setMessage({ text: `Checks finished. ${n} ${n === 1 ? "flag" : "flags"} found.` });
-          break;
-        }
-        if (r.status === "failed") { setMessage({ text: r.error || "The checks didn't finish. Run them again in a moment.", error: true }); break; }
-      }
+      const n = await prog!.runChecks();
+      setMessage({ text: `Checks finished. ${n} ${n === 1 ? "flag" : "flags"} found.` });
       await load();
-      await prog?.refresh();
       setAnyFlags(true);
     } catch (e) {
-      setMessage({ text: e instanceof Error ? e.message : "Couldn't start the checks. Try again.", error: true });
-    } finally { setRunning(false); }
+      setMessage({ text: e instanceof Error ? e.message : "Couldn't run the checks. Try again.", error: true });
+    }
   }
 
+  // If the checks were started elsewhere (for example after the last invoice was marked checked), reload the list when they finish.
+  const running = !!prog?.running;
+  const wasRunning = useRef(false);
   useEffect(() => {
-    if (!autoRun.current) return;
-    autoRun.current = false;
-    try { window.history.replaceState(null, "", "/review"); } catch { /* ignore */ }
+    if (wasRunning.current && !running) load();
+    wasRunning.current = running;
+  }, [running, load]);
+
+  // The checks run on their own: when every invoice is read and checked, and the checks have never run or are out of date.
+  // One automatic attempt per visit, so a failed run never loops; the "Try again" button covers that case.
+  const attempted = useRef(false);
+  useEffect(() => {
+    if (attempted.current || !prog || prog.loading || prog.running) return;
+    if (prog.invoices === 0 || prog.filesBusy > 0 || prog.needReview > 0) return;
+    if (prog.checksRun && !prog.checksStale) return;
+    attempted.current = true;
+    // Starting a background job from an effect is intended here (guarded by `attempted`).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [prog]);
 
   // ---- multi-select (same pattern as the invoices list). A selection only covers what is on screen.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -100,6 +99,11 @@ function Review({ cid }: { cid: string }) {
     setNotice(`${flagWord(r.changed)} ${verb}.${r.unchanged ? ` ${flagWord(r.unchanged)} already ${verb}.` : ""}`);
     await load();
     await prog?.refresh();
+    // Last open flag done and nothing else blocks the report: go straight to it.
+    if (action !== "reopen") {
+      const left = await api.flags(cid, { status: "open" }).then((l) => l.count, () => null);
+      if (left === 0 && (prog?.needReview ?? 0) === 0 && !prog?.checksStale) router.push("/reports");
+    }
   }
 
   const hasOpen = (list?.open_total ?? 0) > 0;
@@ -107,43 +111,69 @@ function Review({ cid }: { cid: string }) {
   const finished = status === "open" && list !== null && list.count === 0 && !hasOpen && (list.confirmed_total > 0 || anyFlags === true) && !type && !shop && !unit;
   const none = list !== null && list.count === 0 && !finished && anyFlags !== true && !type && !shop && !unit;
 
+  const needCheck = prog?.needReview ?? 0;
+  const stale = !!prog?.checksStale;
+  // Only offer the report once nothing blocks it: no open flags, no invoices left to check, and the checks are up to date.
+  const ready = finished && !stale && needCheck === 0;
+
   return (
     <div>
-      <ReviewTabs current="flags" />
-      <div className="mt-6">
-        <h1 className="text-xl">Steps 3 and 4 · Run checks and review flags</h1>
-        <p className="mt-1 max-w-prose text-muted">Run the checks once every invoice is checked. Then open each flag, look at the evidence and accept or dismiss it. Biggest amounts come first.</p>
-      </div>
-      <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto]">
-        <div className="card flex min-w-0 flex-wrap items-end gap-x-10 gap-y-4">
-          <div>
-            <p className="kpi-label">Still to review</p>
-            <p className="num text-[2.5rem] font-bold leading-tight sm:text-hero text-money" data-testid="hero" style={{ boxShadow: "0 4px 0 0 var(--amber)", display: "inline-block", paddingBottom: 4 }}>
-              {list ? money(list.open_total) : "$–"}
-            </p>
-          </div>
-          <div>
-            <p className="kpi-label">Confirmed</p>
-            <p className="kpi-value text-confirmed"><span data-testid="confirmed">{list ? money(list.confirmed_total) : "$–"}</span></p>
-          </div>
-          <div>
-            <p className="kpi-label">Flags open</p>
-            <p className="kpi-value">{prog ? prog.flagsOpen : "–"}<span className="text-base font-normal text-muted"> of {prog?.flags ?? "–"}</span></p>
-          </div>
+      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0 max-w-prose">
+          <p className="eyebrow">Step 2 of 3</p>
+          <h1 className="mt-1 text-xl">Review flags</h1>
+          <p className="mt-1 text-muted">The audit checks run on their own once every invoice is checked. Open each flag, look at the evidence and accept or dismiss it. Biggest amounts come first.</p>
         </div>
-        <div className="card flex flex-col justify-center gap-3 md:w-[300px]">
-          {firstOpen && <Link href={`/review/${firstOpen.id}`} className="btn-primary btn-lg w-full">Start reviewing<IconArrow /></Link>}
-          <button className={`${firstOpen ? "btn-secondary" : "btn-primary btn-lg"} w-full`} onClick={run} disabled={running}>
-            {running ? "Running checks…" : prog?.checksRun ? "Run checks again" : "Run checks"}
-          </button>
-          <p role="status" className={`text-sm ${message?.error ? "text-danger" : "text-muted"}`}>
-            {running ? "This takes a few seconds." : message?.text ?? (prog?.checksStale ? "New invoices since the last run — run the checks again." : prog?.needReview ? `${prog.needReview} invoices still need checking first.` : "")}
-          </p>
+        <div className="w-full shrink-0 sm:w-auto sm:text-right" role="status" aria-live="polite">
+          {running ? (
+            <p className="flex items-center gap-3 font-medium sm:justify-end">
+              <span aria-hidden className="h-5 w-5 shrink-0 animate-spin rounded-full border-[3px] border-sunken border-t-primary" />
+              Running the audit checks…
+            </p>
+          ) : message?.error ? (
+            <>
+              <p className="text-danger">{message.text}</p>
+              <button className="btn-secondary mt-2" onClick={() => { attempted.current = true; run(); }}>Try again</button>
+            </>
+          ) : prog?.checksRun && !stale && needCheck === 0 ? (
+            <p className="flex items-center gap-2 font-medium text-confirmed sm:justify-end">
+              <IconCheck />{message?.text ?? "Checks are up to date."}
+            </p>
+          ) : null}
         </div>
       </div>
 
+      {!running && needCheck > 0 && (
+        <div role="note" className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-3 rounded-lg bg-amber-soft px-4 py-3">
+          <p className="min-w-0 flex-1 basis-64">
+            <b>{needCheck} {needCheck === 1 ? "invoice still needs" : "invoices still need"} checking.</b> Check {needCheck === 1 ? "it" : "them"} in step 1. The audit checks then run on their own.
+          </p>
+          <Link href="/invoices?status=needs_review" className="btn-secondary btn-sm shrink-0">Go to step 1</Link>
+        </div>
+      )}
+
+      <dl className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Review summary">
+        <div className="card col-span-2 sm:col-span-1">
+          <dt className="kpi-label">Still to review</dt>
+          <dd className="kpi-value text-money" data-testid="hero">{list ? money(list.open_total) : "$–"}</dd>
+        </div>
+        <div className="card">
+          <dt className="kpi-label">Confirmed</dt>
+          <dd className="kpi-value text-confirmed" data-testid="confirmed">{list ? money(list.confirmed_total) : "$–"}</dd>
+        </div>
+        <div className="card">
+          <dt className="kpi-label">Flags open</dt>
+          <dd className="kpi-value">{prog ? prog.flagsOpen : "–"}<span className="text-base font-normal text-muted"> of {prog?.flags ?? "–"}</span></dd>
+        </div>
+      </dl>
+
+      <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-6">
+        <h2 className="text-lg">Flags</h2>
+        {firstOpen && <Link href={`/review/${firstOpen.id}`} className="btn-primary btn-lg w-full sm:w-auto">Start reviewing<IconArrow /></Link>}
+      </div>
+
       {prog && prog.byType.length > 0 && (
-        <div className="mt-6 flex flex-wrap gap-2" aria-label="Flags by type">
+        <div className="mt-4 flex flex-wrap gap-2" aria-label="Flags by type">
           <button onClick={() => filterBy(setType)("")} className={`chip ${!type ? "border-primary bg-primary text-white" : "border-line-strong bg-surface hover:bg-sunken"}`}>All types</button>
           {prog.byType.map((t) => (
             <button key={t.type} onClick={() => filterBy(setType)(type === t.type ? "" : t.type)} aria-pressed={type === t.type}
@@ -155,7 +185,7 @@ function Review({ cid }: { cid: string }) {
         </div>
       )}
 
-      <div className="mt-4 flex flex-wrap gap-4">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:flex sm:flex-wrap sm:gap-4">
         <Select id="f-status" label="Status" value={status} onChange={filterBy(setStatus)} all="All statuses" options={Object.entries(STATUS_WORD)} />
         <Select id="f-shop" label="Shop" value={shop} onChange={filterBy(setShop)} all="All shops" options={filters.shops.map((s) => [s, s])} />
         <Select id="f-unit" label="Unit" value={unit} onChange={filterBy(setUnit)} all="All units" options={filters.units.map((s) => [s, s])} />
@@ -174,17 +204,54 @@ function Review({ cid }: { cid: string }) {
       )}
 
       {error && <p role="alert" className="mt-6 text-danger">{error}</p>}
-      {none && <p className="mt-8 max-w-prose text-lg">No flags yet. Run checks after your invoices are read.</p>}
-      {finished && (
-        <div className="card mt-8 max-w-prose border-l-[6px] border-l-confirmed" data-testid="finished">
+      {none && <p className="mt-6 max-w-prose text-lg">No flags yet. Run checks after your invoices are read.</p>}
+      {ready && (
+        <div className="card mt-6 border-l-[6px] border-l-confirmed" data-testid="finished">
           <p className="text-lg font-bold">All flags are reviewed.</p>
           <p className="mt-1 text-muted">Create a report to share what was confirmed.</p>
-          <button className="btn-primary btn-lg mt-4" onClick={() => router.push("/reports?create=1")}>Go to step 5 · Create report</button>
+          <button className="btn-primary btn-lg mt-4 w-full sm:w-auto" onClick={() => router.push("/reports")}>Go to step 3 · Create report<IconArrow /></button>
         </div>
       )}
-      {list && list.flags.length === 0 && !finished && !none && <p className="mt-8 max-w-prose text-lg">No flags match these filters. Change a filter to see more.</p>}
+      {finished && !ready && <p className="mt-6 text-muted">No flags are open right now.</p>}
+      {list && list.flags.length === 0 && !finished && !none && <p className="mt-6 max-w-prose text-lg">No flags match these filters. Change a filter to see more.</p>}
       {list && list.flags.length > 0 && (
-        <div className="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
+        <div className="mt-6 md:hidden">
+          <label className="flex min-h-[44px] items-center gap-3 font-medium">
+            <input type="checkbox" checked={allOn} onChange={toggleAll} className="h-5 w-5" style={{ accentColor: "var(--primary)" }}
+              aria-label={allOn ? `Clear selection of all ${shown.length} flags` : `Select all ${shown.length} flags in this list`} />
+            Select all {shown.length}
+          </label>
+          <ul className="mt-2 flex flex-col gap-3">
+            {list.flags.map((f) => (
+              <li key={f.id} className={`rounded-lg border border-line p-4 ${selected.has(f.id) ? "bg-sunken" : "bg-surface"}`}>
+                <div className="flex items-start gap-3">
+                  <label className="flex min-h-[40px] min-w-[40px] cursor-pointer items-center justify-center">
+                    <input type="checkbox" checked={selected.has(f.id)} onChange={() => toggle(f.id)} className="h-5 w-5" style={{ accentColor: "var(--primary)" }}
+                      aria-label={`Select ${TYPE_NAME[f.type] ?? f.type} flag, ${f.shop || "unknown shop"}, ${money(f.impact)}`} />
+                  </label>
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/review/${f.id}`} className="block font-bold text-primary">{TYPE_NAME[f.type] ?? f.type}</Link>
+                    <p className="text-sm text-muted">{[f.shop, f.unit].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <p className="num font-bold text-money">{money(f.impact)}</p>
+                </div>
+                <p className="mt-2">{f.reason}</p>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <span className={`font-medium ${f.status === "dismissed" ? "text-dismissed" : f.status === "open" ? "" : "text-confirmed"}`}>{STATUS_WORD[f.status] ?? f.status}</span>
+                  <Link href={`/review/${f.id}`} className={f.status === "open" ? "btn-primary btn-sm" : "btn-secondary btn-sm"}>{f.status === "open" ? "Review" : "View"}</Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 flex justify-between border-t-2 border-line-strong pt-3 font-bold">
+            <span>{list.flags.length} {list.flags.length === 1 ? "flag" : "flags"} shown</span>
+            <span className="num text-money">{money(list.flags.reduce((n, f) => n + Number(f.impact || 0), 0))}</span>
+          </p>
+        </div>
+      )}
+
+      {list && list.flags.length > 0 && (
+        <div className="mt-6 hidden overflow-x-auto rounded-lg border border-line bg-surface md:block">
           <table className="w-full min-w-[960px] border-collapse">
             <caption className="sr-only">Flags to review</caption>
             <thead>
@@ -300,7 +367,7 @@ function Select({ id, label, value, onChange, all, options }: { id: string; labe
   return (
     <div>
       <label htmlFor={id} className="mb-1 block text-sm font-medium">{label}</label>
-      <select id={id} className="field min-w-[180px]" value={value} onChange={(e) => onChange(e.target.value)}>
+      <select id={id} className="field sm:min-w-[180px] sm:w-auto" value={value} onChange={(e) => onChange(e.target.value)}>
         <option value="">{all}</option>
         {options.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
       </select>

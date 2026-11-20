@@ -64,6 +64,9 @@
   .btn-lg {
     @apply min-h-[56px] px-6 text-lg;
   }
+  .eyebrow {
+    @apply text-sm font-bold uppercase tracking-wide text-primary;
+  }
   .btn-link {
     @apply inline-flex min-h-[40px] items-center gap-1 font-medium text-primary underline underline-offset-4 hover:text-primary-hover;
   }

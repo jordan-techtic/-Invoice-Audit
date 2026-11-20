@@ -9,12 +9,9 @@ test("run checks shows the hero figure and flag rows", async ({ page, request })
   await page.goto("/clients");
   await page.getByRole("button", { name: "Work on Lone Prairie Freight" }).click();
   await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: "Review" }).click();
-  await page.getByRole("link", { name: "Flags to review" }).click();
 
-  await page.getByRole("button", { name: "Run checks" }).click();
-  await expect(page.getByRole("button", { name: "Running checks…" })).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Run checks" })).toBeEnabled({ timeout: 60_000 });
-  await expect(page.getByText(/Checks finished/)).toBeVisible();
+  // No button to press: opening step 2 runs the checks when they are out of date.
+  await expect(page.getByText(/Checks finished|Checks are up to date/)).toBeVisible({ timeout: 60_000 });
 
   const hero = await page.getByTestId("hero").innerText();
   expect(Number(hero.replace(/[$,]/g, ""))).toBeGreaterThan(0);
