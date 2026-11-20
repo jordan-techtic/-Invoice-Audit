@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api, apiUrl, dateTime, money, type ReportItem } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { useProgress } from "@/lib/progress";
+import { copyText, shareLink } from "@/lib/clipboard";
 import NeedClient from "@/components/NeedClient";
 import { IconArrow } from "@/components/Icons";
 
@@ -24,6 +25,7 @@ function Reports({ cid }: { cid: string }) {
   const [done, setDone] = useState<string | null>(null);
   const [problem, setProblem] = useState<{ text: string; conflict?: boolean } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [manual, setManual] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<string | null>(null);
 
   const load = useCallback(() => api.reports(cid).then(setRows).catch((e) => setProblem({ text: e instanceof Error ? e.message : "Couldn't load reports." })), [cid]);
@@ -52,8 +54,10 @@ function Reports({ cid }: { cid: string }) {
 
   async function copy(r: ReportItem) {
     if (!r.share_url) return;
-    try { await navigator.clipboard.writeText(r.share_url); } catch { /* clipboard may be blocked */ }
-    setCopied(r.id);
+    const link = shareLink(r.share_url);
+    if (await copyText(link)) { setManual(null); setCopied(r.id); }
+    // The browser refused (some locked-down browsers do): show the link so it can be copied by hand.
+    else { setCopied(null); setManual(link); }
   }
 
   async function revoke(id: string) {
@@ -102,6 +106,12 @@ function Reports({ cid }: { cid: string }) {
         </p>
       )}
 
+      {manual && (
+        <div role="status" className="mt-6 rounded-lg border border-line-strong bg-surface p-4">
+          <label htmlFor="manual-link" className="block font-medium">Your browser blocked copying. Copy this link by hand:</label>
+          <input id="manual-link" readOnly value={manual} className="field mt-2" autoFocus onFocus={(e) => e.currentTarget.select()} />
+        </div>
+      )}
       {done && <p role="status" className="mt-6 font-medium text-confirmed">{done}</p>}
       {problem && (
         <p role="alert" className="mt-6 text-danger">{problem.text}{problem.conflict && <> <Link href="/review" className="btn-link">Review flags</Link></>}</p>
