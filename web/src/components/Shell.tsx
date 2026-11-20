@@ -79,7 +79,8 @@ function Frame({ children }: { children: React.ReactNode }) {
             {client ? "Switch client" : "Choose client"}
           </Link>
         </header>
-        {client && <StepBar />}
+        {/* The Overview page already shows the steps and the next action itself. */}
+        {client && !path.startsWith("/overview") && <StepBar />}
         <main className="w-full px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-10">{children}</main>
       </div>
     </div>
