@@ -8,10 +8,11 @@ def run(ctx: Context) -> list[FlagDraft]:
     days_limit = int(ctx.config["repeat_repair_days"])
     miles_limit = int(ctx.config["repeat_repair_miles"])
     exclude = set(ctx.config.get("repeat_exclude_codes", []))
+    both = str(ctx.config.get("repeat_condition", "or")).lower() == "and"
     out: list[FlagDraft] = []
     for (unit, code), entries in history(ctx.invoices).items():
-        if code in exclude:
-            continue
+        if code in exclude or code.startswith("000-"):
+            continue  # routine work (system 000: PM services and inspections) repeats on purpose
         seen_repairs: set[str] = set()
         for i, (inv, ln) in enumerate(entries):
             if inv.id in seen_repairs:
@@ -21,17 +22,20 @@ def run(ctx: Context) -> list[FlagDraft]:
             p = prior_repair(entries, i)
             if p is None or p.days < 0:
                 continue
+            miles = None if inv.vehicle_class == "trailer" else p.miles  # trailers have no odometer: days only
             within_days = p.days <= days_limit
-            within_miles = p.miles is not None and 0 <= p.miles <= miles_limit
-            if not (within_days or within_miles):
+            miles_known = miles is not None and miles >= 0  # a falling odometer is a misread, not a distance
+            within_miles = miles_known and miles <= miles_limit
+            # "and": inside the days AND the miles (days alone when the miles are unknown). "or": either is enough.
+            if not ((within_days and (within_miles or not miles_known)) if both else (within_days or within_miles)):
                 continue
             impact = total_amount
             name = ctx.code_names.get(code, "This component")
-            when = f"{p.days} days" + (f" and {p.miles:,} miles" if p.miles is not None and p.miles >= 0 else "")
+            when = f"{p.days} days" + (f" and {miles:,} miles" if miles_known else "")
             out.append(FlagDraft(
                 type="repeat_repair", invoice_id=inv.id, line_id=ln.id, related_invoice_id=p.invoice.id, impact=impact,
                 dedupe_key=f"repeat:{ln.id}",
-                evidence={"vmrs_code": code, "job": name, "unit": unit, "days_since_previous": p.days, "miles_since_previous": p.miles,
+                evidence={"vmrs_code": code, "job": name, "unit": unit, "days_since_previous": p.days, "miles_since_previous": miles,
                           "previous_invoice": p.invoice.invoice_number, "previous_date": str(p.invoice.invoice_date),
                           "limit_days": days_limit, "limit_miles": miles_limit, "line_total": float(impact)},
                 template_reason=(f"{name} was likely repaired again on the same unit {when} after the previous repair. "

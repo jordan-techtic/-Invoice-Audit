@@ -33,7 +33,7 @@ def test_money(raw, exp):
     assert N.parse_money(raw) == (Decimal(exp) if exp else None)
 
 
-@pytest.mark.parametrize("raw", ["2026-03-14", "03/14/2026", "3/14/26", "Mar 14, 2026", "March 14, 2026", "14 Mar 2026"])
+@pytest.mark.parametrize("raw", ["2026-03-14", "03/14/2026", "3/14/26", "Mar 14, 2026", "March 14, 2026", "14 Mar 2026", "14-Mar-2026", "2026/03/14", "14-March-2026"])
 def test_dates_normalise_to_iso(raw):
     assert N.parse_date(raw) == date(2026, 3, 14)
 
@@ -42,3 +42,18 @@ def test_odometer_integer_miles():
     assert N.parse_odometer("412,880 mi") == 412880
     assert N.parse_odometer("abc") is None
     assert N.parse_odometer("99999999") is None
+
+
+# ---- artifact L11: number parsing must not turn one amount into another
+def test_a_decimal_comma_is_a_decimal_not_a_thousands_separator():
+    assert N.parse_number("1,5") == Decimal("1.5") and N.parse_number("2,25") == Decimal("2.25")
+    assert N.parse_number("1,250") == Decimal("1250") and N.parse_number("12,345.5") == Decimal("12345.5")
+
+
+def test_european_formatted_money_is_read_correctly():
+    assert N.parse_money("1.234,50") == Decimal("1234.50")
+    assert N.parse_money("1,234.50") == Decimal("1234.50") and N.parse_money("12,50") == Decimal("12.50") and N.parse_money("1,234") == Decimal("1234.00")
+
+
+def test_an_odometer_of_zero_is_not_a_reading():
+    assert N.parse_odometer(0) is None and N.parse_odometer("0") is None and N.parse_odometer("412880") == 412880

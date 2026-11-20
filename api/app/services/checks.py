@@ -31,8 +31,22 @@ class InvoiceResult:
     checks_failed: list[str] = field(default_factory=list)
 
 
+# Notes written when an arithmetic or VIN check FAILS (as opposed to a field that is merely hard to read). The review step recognises a
+# failed check by these phrases and will not mark the invoice "checked" until the field is corrected or confirmed as printed.
+FAILED_CHECK_PHRASES = ("add up to", "doesn't equal the total", "don't equal the total", "check digit doesn't match", "a VIN has 17 characters")
 NOTE_LOW = "Check this: hard to read on the invoice."
 NOTE_MISSING = "Check this: not found on the invoice."
+
+
+LINES_VS_TOTAL_NOTE = "Check this: the lines plus tax don't equal the total, so one of the line totals may be misread."
+
+
+def _mark_line_totals(lines: list[dict[str, "FieldResult"]]) -> None:
+    """A clearly read total that the lines don't reach usually means a line was misread (often one that adds up on its own,
+    so the line check passes it). Mark every line total so the person compares each with the image, not only the total."""
+    for ln in lines:
+        if ln["line_total"].value is not None and LINES_VS_TOTAL_NOTE not in (ln["line_total"].note or ""):
+            _lower(ln["line_total"], 0.6, LINES_VS_TOTAL_NOTE)
 
 
 def _lower(fr: FieldResult, cap: float, note: str) -> None:
@@ -53,7 +67,8 @@ def normalise_and_check(
     failed: list[str] = []
 
     def fr(d: dict) -> FieldResult:
-        return FieldResult(d["value"], float(d["confidence"]))
+        # a note set before the checks (for example "two readings disagree") sends the field to review with that reason
+        return FieldResult(d["value"], float(d["confidence"]), note=d.get("note"), failed_check=bool(d.get("note")))
 
     h = {k: fr(v) for k, v in merged_header.items()}
 
@@ -143,22 +158,46 @@ def normalise_and_check(
         if lab == 0 and price is None:
             continue
         if all(abs(c - lt) > tolerance for c in candidates):
-            _lower(ln["line_total"], 0.6, "Check this: quantity, price and hours don't add up to this total.")
+            # Any one of these numbers may be the misread one, so every number on the line is marked, not just the total.
+            for k in ("qty", "parts_price", "labour_hours", "labour_rate", "line_total"):
+                if ln[k].value is not None:
+                    _lower(ln[k], 0.6, "Check this: quantity, price and hours on this line don't add up to its total.")
             failed.append("line_math")
+        elif price is not None and qty > 1 and lab == 0 and abs(price - lt) <= tolerance:
+            _lower(ln["parts_price"], 0.6, f"Check this: the price for one equals the line total although the quantity is {qty}, so it may be the extended amount.")
+            failed.append("price_is_extended")
+
+    # ---- a labour-only line whose quantity just repeats its hours: the model copied one field into the other
+    for ln in lines:
+        q, hrs = ln["qty"].value, ln["labour_hours"].value
+        if q is not None and hrs is not None and q == hrs and not ln["parts_price"].value:
+            _lower(ln["qty"], 0.4, "Check this: the quantity is the same as the labour hours, so it may have been copied from them.")
+            failed.append("qty_is_hours")
 
     # ---- invoice totals
     sub, tax, tot = h["subtotal"].value, h["tax"].value, h["total"].value
     line_sum = sum((ln["line_total"].value for ln in lines if ln["line_total"].value is not None), Decimal(0))
-    if sub is not None and lines and any(ln["line_total"].value is not None for ln in lines) and abs(line_sum - sub) > tolerance:
+    # Most shops print "Parts / Labor / Tax / TOTAL DUE" with no Subtotal row, so the model may hand back one of those rows as the
+    # subtotal. If the lines plus tax already equal the total, the invoice adds up and the subtotal is the doubtful number: do not fail the invoice.
+    adds_up = (tot is not None and bool(lines) and all(ln["line_total"].value is not None for ln in lines) and line_sum > 0
+               and abs(line_sum + (tax or Decimal(0)) - tot) <= tolerance)
+    if sub is not None and not adds_up and lines and any(ln["line_total"].value is not None for ln in lines) and abs(line_sum - sub) > tolerance:
         _lower(h["subtotal"], 0.6, "Check this: the lines don't add up to the subtotal.")
         failed.append("subtotal_vs_lines")
-    if sub is not None and tot is not None:
+    if sub is not None and tot is not None and not adds_up:
         if abs(sub + (tax or Decimal(0)) - tot) > tolerance:
             _lower(h["total"], 0.6, "Check this: subtotal plus tax doesn't equal the total.")
             failed.append("total_vs_subtotal_tax")
     elif sub is None and tot is not None and lines and abs(line_sum + (tax or Decimal(0)) - tot) > tolerance and line_sum > 0:
+        total_was_clear = h["total"].confidence >= threshold   # read before it is lowered just below
         _lower(h["total"], 0.6, "Check this: the lines plus tax don't equal the total.")
         failed.append("total_vs_lines")
+        if total_was_clear:
+            _mark_line_totals(lines)
+    # The subtotal agrees with the total but not with the lines: a line is the likely misread one.
+    if (sub is not None and tot is not None and lines and all(ln["line_total"].value is not None for ln in lines)
+            and abs(sub + (tax or Decimal(0)) - tot) <= tolerance and abs(line_sum - sub) > tolerance):
+        _mark_line_totals(lines)
 
     # ---- missing but expected
     for k in ("invoice_number", "invoice_date", "total", "shop_name"):

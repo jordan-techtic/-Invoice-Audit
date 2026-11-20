@@ -1,7 +1,14 @@
 export type Role = "admin" | "analyst" | string;
 export interface User { id: string; email: string; name: string; role: Role }
+/** The thresholds the audit checks use, as stored per client. */
+export interface Thresholds {
+  labour_over_benchmark_pct: number; labour_min_samples: number;
+  repeat_repair_days: number; repeat_repair_miles: number; repeat_condition: "and" | "or";
+  parts_outlier_pct: number; parts_single_shop_multiple: number; parts_min_samples: number;
+  math_tolerance: number; duplicate_window_days: number;
+}
 export interface Client {
-  id: string; name: string; slug: string;
+  id: string; name: string; slug: string; settings?: Thresholds;
   raw_retention_days?: number; raw_files_deleted_at?: string | null; audit_completed_at?: string | null;
 }
 export type UploadStatus = "queued" | "reading" | "needs_review" | "done" | "failed" | "duplicate";
@@ -32,7 +39,7 @@ export interface InvoiceDetail {
 
 export type FlagType = "labour_over_benchmark" | "repeat_repair" | "warranty_eligible" | "parts_price_outlier" | "duplicate" | "math_error";
 export interface Flag {
-  id: string; type: FlagType; severity: string | null; impact: number; reason: string; status: string;
+  id: string; type: FlagType; severity: string | null; impact: number; reason: string; status: string; ai_score: number | null;
   shop: string | null; unit: string | null; invoice_id: string; invoice_number: string | null; line_description: string | null;
 }
 export type FlagStatus = "open" | "accepted" | "edited" | "dismissed";
@@ -42,7 +49,7 @@ export interface FlagList {
 }
 export interface FlagDetail {
   id: string; type: FlagType; severity: string | null; impact: number; original_impact: number;
-  reason: string; original_reason: string; status: FlagStatus; dismiss_reason: DismissReason | null; note: string | null;
+  reason: string; original_reason: string; status: FlagStatus; ai_score: number | null; dismiss_reason: DismissReason | null; note: string | null;
   reviewed_by: string | null; reviewed_at: string | null; evidence_lines: string[];
   invoice: { id: string; invoice_number: string | null; invoice_date: string | null; shop: string | null; unit: string | null;
     vin: string | null; odometer: number | string | null; total: number | string | null; pages: { n: number; url: string }[]; flagged_page: number | null };
@@ -65,19 +72,51 @@ export interface Snapshot {
 export interface ReportItem {
   id: string; version: number; generated_at: string; recoverable: number; flag_count: number;
   expires_at: string | null; revoked: boolean; expired: boolean; share_url: string | null;
+  /** A flag decision changed after this report was created. */
+  out_of_date?: boolean;
 }
 export interface FlagRun {
   id: string; status: "queued" | "running" | "done" | "failed"; started_at: string | null; finished_at: string | null;
   summary: { flags: number; by_type: Record<string, number>; notes: string[] } | null; error: string | null;
 }
-export interface WarrantyRule { id: string; vmrs_code: string; component: string; months: number; miles: number | null }
-export interface Benchmark { vmrs_code: string; component: string; hours: number; source: string; sample_count: number | null }
+export type Covers = "parts" | "parts+labour";
+export interface WarrantyRule { id: string; vmrs_code: string; component: string; months: number; miles: number | null; covers: Covers }
+export interface Vehicle { id: string; unit_number: string; vin: string | null; vehicle_class: string | null; year: number | null; make: string | null; model: string | null; start_odometer: number | null }
+/** One problem found in an imported file. row 1 is the header; 0 means the file as a whole. */
+export interface ImportProblem { row: number; field: string | null; message: string }
+export interface WarrantyImportResult {
+  rows: number; added: number; updated: number; mode: "merge" | "replace"; total_rules: number;
+  merged: { row: number; component: string; into: string; reason: string }[];
+  skipped: { row: number; component: string; reason: string }[];
+}
+export interface VehicleImportResult { rows: number; added: number; updated: number; total_vehicles: number; warnings: { row: number; message: string }[] }
+export interface ThresholdsImportResult { settings: Partial<Thresholds>; applied: { file_key: string; setting: string; value: number }[]; ignored: string[] }
+export interface Benchmark { id: string; vmrs_code: string; component: string; vehicle_class: string | null; hours: number; source: string; sample_count: number | null }
+export interface VehicleInput { unit_number: string; vehicle_class: string; vin?: string | null; year?: number | null; make?: string | null; model?: string | null; start_odometer?: number | null }
+export interface VmrsCodeRow { code: string; component: string; system: string }
+export interface BenchmarkJobsResult {
+  rows: number; imported: number;
+  merged: { row: number; job: string; into: string; reason: string }[];
+  skipped: { row: number; job: string; reason: string }[];
+}
+
+/** The AI's 0–1 view of how likely a flag is a real issue, in words. */
+export function aiRating(score: number | null | undefined): { pct: string; words: string; tone: "good" | "mid" | "low" | "none" } {
+  if (score === null || score === undefined) return { pct: "–", words: "Not rated", tone: "none" };
+  const pct = `${Math.round(score * 100)}%`;
+  if (score >= 0.7) return { pct, words: "Likely a real issue", tone: "good" };
+  if (score >= 0.4) return { pct, words: "Unsure", tone: "mid" };
+  return { pct, words: "Possibly a misread or innocent", tone: "low" };
+}
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** Row-by-row problems, when an imported file was rejected. */
+  errors: ImportProblem[];
+  constructor(status: number, message: string, errors: ImportProblem[] = []) {
     super(message);
     this.status = status;
+    this.errors = errors;
   }
 }
 
@@ -106,7 +145,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new ApiError(res.status, errorText(body, res.status));
+    const errors = body && typeof body === "object" && Array.isArray((body as { errors?: unknown }).errors) ? (body as { errors: ImportProblem[] }).errors : [];
+    throw new ApiError(res.status, errorText(body, res.status), errors);
   }
   return body as T;
 }
@@ -135,10 +175,11 @@ export const api = {
   flag: (cid: string, fid: string) => request<FlagDetail>(`/clients/${cid}/flags/${fid}`),
   flagAction: (cid: string, fid: string, action: "accept" | "dismiss" | "edit" | "reopen", body: object = {}) =>
     request<FlagDetail>(`/clients/${cid}/flags/${fid}/${action}`, json("POST", body)),
-  bulkFlags: (cid: string, ids: string[], action: "accept" | "dismiss" | "reopen", extra: { reason?: DismissReason; note?: string } = {}) =>
-    request<{ changed: number; unchanged: number; skipped: number }>(`/clients/${cid}/flags/bulk`, json("POST", { ids, action, ...extra })),
+  bulkFlags: (cid: string, ids: string[], action: "accept" | "dismiss" | "reopen", extra: { reason?: DismissReason; note?: string; extraction_checked?: boolean } = {}) =>
+    request<{ changed: number; unchanged: number; skipped: number; needs_extraction_check?: string[] }>(`/clients/${cid}/flags/bulk`, json("POST", { ids, action, ...extra })),
   recheck: (cid: string, iid: string) => request<{ flags: number; added: number; removed: number }>(`/clients/${cid}/invoices/${iid}/recheck`, { method: "POST" }),
   client: (cid: string) => request<Client>(`/clients/${cid}`),
+  reportPreview: (cid: string) => request<{ invoices_included: number; invoices_left_out: number; flags: number; recoverable: number; open_flags: number; first_open_flag: string | null }>(`/clients/${cid}/reports/preview`),
   reportSettings: (cid: string) => request<{ default_offer_text: string; company_name: string }>(`/clients/${cid}/report-settings`),
   createReport: (cid: string, body: { expires_days: number; offer_text: string }) => request<ReportItem>(`/clients/${cid}/reports`, json("POST", body)),
   reports: (cid: string) => request<ReportItem[]>(`/clients/${cid}/reports`),
@@ -153,14 +194,44 @@ export const api = {
   updateWarrantyRule: (cid: string, id: string, r: Partial<Omit<WarrantyRule, "id" | "vmrs_code">>) =>
     request<unknown>(`/clients/${cid}/warranty-rules/${id}`, json("PUT", r)),
   deleteWarrantyRule: (cid: string, id: string) => request<unknown>(`/clients/${cid}/warranty-rules/${id}`, { method: "DELETE" }),
+  updateSettings: (cid: string, settings: Partial<Thresholds>) => request<Client>(`/clients/${cid}`, json("PATCH", { settings })),
+  importThresholds: (cid: string, file: File) => {
+    const f = new FormData(); f.append("file", file);
+    return request<ThresholdsImportResult>(`/clients/${cid}/settings/import-thresholds`, { method: "POST", body: f });
+  },
+  importWarranty: (cid: string, file: File, mode: "merge" | "replace") => {
+    const f = new FormData(); f.append("file", file); f.append("mode", mode);
+    return request<WarrantyImportResult>(`/clients/${cid}/warranty-rules/import`, { method: "POST", body: f });
+  },
+  vehicles: (cid: string) => request<Vehicle[]>(`/clients/${cid}/vehicles`),
+  addVehicle: (cid: string, v: VehicleInput) => request<Vehicle>(`/clients/${cid}/vehicles`, json("POST", v)),
+  updateVehicle: (cid: string, id: string, v: VehicleInput) => request<Vehicle>(`/clients/${cid}/vehicles/${id}`, json("PUT", v)),
+  deleteVehicle: (cid: string, id: string) => request<unknown>(`/clients/${cid}/vehicles/${id}`, { method: "DELETE" }),
+  deleteAllVehicles: (cid: string) => request<{ removed: number }>(`/clients/${cid}/vehicles`, { method: "DELETE" }),
+  deleteAllWarranty: (cid: string) => request<{ removed: number }>(`/clients/${cid}/warranty-rules`, { method: "DELETE" }),
+  vmrsCodes: (cid: string) => request<VmrsCodeRow[]>(`/clients/${cid}/vmrs-codes`),
+  addBenchmark: (cid: string, b: { vmrs_code: string; benchmark_hours: number; vehicle_class?: string | null }) => request<{ id: string }>(`/clients/${cid}/benchmarks`, json("POST", b)),
+  deleteBenchmark: (cid: string, id: string) => request<unknown>(`/clients/${cid}/benchmarks/${id}`, { method: "DELETE" }),
+  deleteAllBenchmarks: (cid: string) => request<{ removed: number }>(`/clients/${cid}/benchmarks`, { method: "DELETE" }),
+  importBenchmarkJobs: (cid: string, file: File) => {
+    const f = new FormData(); f.append("file", file);
+    return request<BenchmarkJobsResult>(`/clients/${cid}/benchmarks/import-jobs`, { method: "POST", body: f });
+  },
+  importVehicles: (cid: string, file: File) => {
+    const f = new FormData(); f.append("file", file);
+    return request<VehicleImportResult>(`/clients/${cid}/vehicles/import`, { method: "POST", body: f });
+  },
   benchmarks: (cid: string) => request<Benchmark[]>(`/clients/${cid}/benchmarks`),
   importBenchmarks: (cid: string, file: File) => {
     const f = new FormData(); f.append("file", file);
     return request<{ imported: number }>(`/clients/${cid}/benchmarks/import`, { method: "POST", body: f });
   },
-  bulkCheck: (cid: string, ids: string[]) => request<{ checked: number; already_checked: number; skipped: number }>(`/clients/${cid}/invoices/bulk-check`, json("POST", { ids })),
+  confirmField: (cid: string, id: string, field: string, lineId?: string) =>
+    request<{ ok: boolean; fields_to_check: number }>(`/clients/${cid}/invoices/${id}/fields/confirm`, json("POST", { field, line_id: lineId })),
+  bulkCheck: (cid: string, ids: string[]) => request<{ checked: number; already_checked: number; skipped: number; blocked?: { id: string; fields: string[]; reason: string }[] }>(`/clients/${cid}/invoices/bulk-check`, json("POST", { ids })),
   bulkDelete: (cid: string, ids: string[]) => request<{ deleted: number; skipped: number }>(`/clients/${cid}/invoices/bulk-delete`, json("POST", { ids })),
-  markChecked: (cid: string, id: string) => request<unknown>(`/clients/${cid}/invoices/${id}/mark-checked`, { method: "POST" }),
+  markChecked: (cid: string, id: string, confirmAsPrinted = false) =>
+    request<unknown>(`/clients/${cid}/invoices/${id}/mark-checked${confirmAsPrinted ? "?confirm_as_printed=true" : ""}`, { method: "POST" }),
 };
 
 /** Upload one file with real progress. Resolves with the per-file result from the API. */
@@ -220,5 +291,6 @@ export function dateTime(iso: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-export const REVIEW_QUERY_KEY = "ia.reviewQuery";
-export const REVIEW_IDS_KEY = "ia.reviewIds";
+// Review state is kept per client: a list of flag ids from one client must never be read while working on another.
+export const reviewQueryKey = (cid: string) => `ia.reviewQuery.${cid}`;
+export const reviewIdsKey = (cid: string) => `ia.reviewIds.${cid}`;

@@ -93,7 +93,7 @@ def test_pdf_downloads_opens_and_matches_dashboard(admin_client, world):
         assert t["label"] in text
     for a in snap["appendix"]:
         assert a["invoice_number"] in text
-    assert "reviewed by an analyst" in text.replace("\n", " ")
+    assert "reviewed by an analyst" in text.replace("\n", " ")           # a report with accepted findings does say each was reviewed
 
 
 def test_empty_report_renders_properly_without_zero_chart(admin_client, world):
@@ -107,7 +107,8 @@ def test_empty_report_renders_properly_without_zero_chart(admin_client, world):
     assert snap["breakdown"]["by_type"] == [] and snap["appendix"] == [] and snap["summary"]["top_findings"] == []
     text = pdf_text(admin_client.get(f"/clients/{cid}/reports/{rid}/pdf").content)
     assert "No likely overbilling was found" in text and "$0" not in text and "Where the money is" not in text
-    assert "reviewed by an analyst" in text.replace("\n", " ")
+    assert "reviewed by an analyst" not in text.replace("\n", " ")        # nothing was reviewed into a finding, so the report does not say so (artifact RP3)
+    assert "Estimates are based on the invoices provided" in text.replace("\n", " ")
 
 
 def public(token_url, **kw):
@@ -147,11 +148,12 @@ def test_report_is_a_snapshot_later_edits_do_not_change_it(admin_client, world):
     cid = world["a"]
     flags, r = make(admin_client, cid)
     rid = r.json()["id"]
-    before = admin_client.get(f"/clients/{cid}/reports/{rid}").json()
+    frozen = lambda r: {k: v for k, v in r.items() if k != "out_of_date"}   # out_of_date is computed from today's decisions; the content is what is frozen
+    before = frozen(admin_client.get(f"/clients/{cid}/reports/{rid}").json())
     pdf_before = pdf_text(admin_client.get(f"/clients/{cid}/reports/{rid}/pdf").content)
     admin_client.post(f"/clients/{cid}/flags/{flags[0]['id']}/edit", json={"amount": 1.0, "reason": "Possible tiny issue."})
     admin_client.post(f"/clients/{cid}/flags/{flags[1]['id']}/dismiss", json={"reason": "other"})
-    assert admin_client.get(f"/clients/{cid}/reports/{rid}").json() == before
+    assert frozen(admin_client.get(f"/clients/{cid}/reports/{rid}").json()) == before
     assert pdf_text(admin_client.get(f"/clients/{cid}/reports/{rid}/pdf").content) == pdf_before
     v2 = admin_client.post(f"/clients/{cid}/reports", json={}).json()          # a new report reflects the new decisions
     assert v2["version"] == 2 and v2["recoverable"] != before["summary"]["recoverable"]
@@ -194,3 +196,105 @@ def test_audit_period_ignores_misread_years():
     good = [date(today.year - 2, 3, 5), date(today.year - 1, 9, 20)]
     assert audit_period(good + [date(2014, 9, 1), date(today.year + 3, 1, 1), None]) == audit_period(good)   # the 2014 and future dates are dropped
     assert audit_period([date(2001, 1, 1)]) is None and audit_period([]) is None
+
+
+# ---- artifact RP1-RP4: what the client report says must match what was decided, and be safe to read
+def test_report_is_marked_out_of_date_when_a_flag_decision_changes_afterwards(admin_client, world):
+    cid = world["a"]
+    flags, r = make(admin_client, cid)
+    rid = r.json()["id"]
+    assert admin_client.get(f"/clients/{cid}/reports").json()[0]["out_of_date"] is False
+    admin_client.post(f"/clients/{cid}/flags/{flags[0]['id']}/dismiss", json={"reason": "other"})
+    assert admin_client.get(f"/clients/{cid}/reports").json()[0]["out_of_date"] is True
+    assert admin_client.get(f"/clients/{cid}/reports/{rid}").json()["out_of_date"] is True
+
+
+def test_a_new_version_turns_off_the_older_public_link(admin_client, world):
+    cid = world["a"]
+    flags, r1 = make(admin_client, cid)
+    token1 = r1.json()["share_url"].rsplit("/r/", 1)[1]
+    assert TestClient(app).get(f"/public/reports/{token1}").status_code == 200
+    r2 = admin_client.post(f"/clients/{cid}/reports", json={})
+    token2 = r2.json()["share_url"].rsplit("/r/", 1)[1]
+    assert TestClient(app).get(f"/public/reports/{token1}").status_code == 410
+    assert TestClient(app).get(f"/public/reports/{token2}").status_code == 200
+
+
+def test_the_cover_counts_only_invoices_that_are_not_waiting_for_review(admin_client, world):
+    from app.models import Invoice, ReviewStatus
+
+    cid = world["a"]
+    flags = setup_flags(admin_client, cid)
+    with client_session(cid) as db:
+        invs = list(db.scalars(select(Invoice)))
+        for i, inv in enumerate(invs):
+            inv.review_status = ReviewStatus.reviewed if i % 2 == 0 else ReviewStatus.needs_review
+        db.commit()
+        reviewed = sum(1 for i in invs if i.review_status == ReviewStatus.reviewed)
+    decide(admin_client, cid, flags, len(flags))
+    snap = admin_client.get(f"/clients/{cid}/reports/{admin_client.post(f'/clients/{cid}/reports', json={}).json()['id']}").json()
+    assert snap["cover"]["invoices_reviewed"] == reviewed < len(invs)
+
+
+def test_one_month_is_named_once():
+    from datetime import date
+    from app.services.report_data import audit_period
+
+    assert audit_period([date.today().replace(day=2), date.today().replace(day=20)]) == f"{date.today():%b %Y}"
+
+
+def test_the_analyst_review_sentence_is_only_printed_when_there_were_findings(admin_client, world):
+    cid = world["a"]
+    flags = setup_flags(admin_client, cid)
+    decide(admin_client, cid, flags, 0)                                       # everything dismissed: an empty report
+    empty = admin_client.get(f"/clients/{cid}/reports/{admin_client.post(f'/clients/{cid}/reports', json={}).json()['id']}").json()
+    assert empty["empty"] and "reviewed by an analyst" not in empty["note"]
+    for f in flags:
+        admin_client.post(f"/clients/{cid}/flags/{f['id']}/reopen")
+    decide(admin_client, cid, flags, len(flags))
+    full = admin_client.get(f"/clients/{cid}/reports/{admin_client.post(f'/clients/{cid}/reports', json={}).json()['id']}").json()
+    assert "reviewed by an analyst" in full["note"]
+
+
+def test_paragraphs_count_invoices_not_flags_and_agree_in_number():
+    from app.services.report_data import _paragraphs
+
+    rows = {"math_error": {"count": 3, "invoices": 2, "amount": 120.0, "examples": []}, "duplicate": {"count": 1, "invoices": 1, "amount": 80.0, "examples": []}}
+    out = _paragraphs(rows, None)
+    assert out["math_error"].startswith("We found 2 invoices ")
+    assert out["duplicate"].startswith("We found 1 invoice that looks like ")
+
+
+def test_a_narrative_with_a_wrong_dollar_figure_falls_back_to_the_template():
+    from types import SimpleNamespace as NS
+    from app.services.report_data import _paragraphs
+
+    class Provider:
+        def narrate(self, payload):
+            return NS(items=[NS(type="math_error", paragraph="We found 2 invoices with a possible difference of about $9,999 that is likely worth asking about.")])
+
+    out = _paragraphs({"math_error": {"count": 2, "invoices": 2, "amount": 120.0, "examples": []}}, Provider())
+    assert "$9,999" not in out["math_error"] and "$120" in out["math_error"]
+
+
+def test_the_report_page_never_prints_None_and_keeps_Other_last_and_in_scale(admin_client, world):
+    from app.services.report_pdf import render_html
+
+    cid = world["a"]
+    flags, r = make(admin_client, cid)
+    snap = admin_client.get(f"/clients/{cid}/reports/{r.json()['id']}").json()
+    snap["appendix"][0].update(date=None, invoice_number=None, shop=None, unit=None)
+    snap["breakdown"]["by_shop"] = [{"label": "Acme", "count": 1, "amount": 100.0}, {"label": "Other", "count": 4, "amount": 400.0}]
+    html = render_html(snap)
+    assert "None" not in re.sub(r"<[^>]+>", " ", html)
+    widths = [float(w) for w in re.findall(r'class="bar[^"]*" style="width: ([\d.]+)%', html.split("By shop")[1].split("By vehicle")[0])]
+    assert widths == [100.0, 100.0]        # "Other" is the sum of the tail: it must not shrink the real top shop
+
+
+# ---- artifact RP4 root cause: three sections each force a new page, so a two-finding report is five mostly empty pages
+def test_a_small_report_is_not_spread_over_mostly_empty_pages(admin_client, world):
+    cid = world["a"]
+    flags, r = make(admin_client, cid)
+    pdf = admin_client.get(f"/clients/{cid}/reports/{r.json()['id']}/pdf").content
+    pages = [len(p.extract_text().strip()) for p in PdfReader(io.BytesIO(pdf)).pages]
+    assert len(flags) == 2 and len(pages) <= 4, pages

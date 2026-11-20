@@ -175,8 +175,8 @@ def test_flags_never_cross_clients(admin_client, analyst_client, world):
 
 def test_warranty_rules_admin_can_edit_analyst_cannot(admin_client, analyst_client, world):
     cid = world["a"]
-    fresh = admin_client.post("/clients", json={"name": "Defaults Test Fleet"}).json()["id"]
-    assert len(admin_client.get(f"/clients/{fresh}/warranty-rules").json()) >= 15   # new clients get the default rules
+    fresh = admin_client.post("/clients", json={"name": "Empty Test Fleet"}).json()["id"]
+    assert admin_client.get(f"/clients/{fresh}/warranty-rules").json() == []   # new clients start empty: terms come from an import, not from us
     rules = admin_client.get(f"/clients/{cid}/warranty-rules").json()
     assert any(r["component"] == "Alternator A" and r["months"] == 12 and r["miles"] == 100000 for r in rules)
     alt = next(r for r in rules if r["component"].startswith("Alternator"))
@@ -199,3 +199,46 @@ def test_benchmark_csv_import(admin_client, world):
     rows = {b["vmrs_code"]: b for b in admin_client.get(f"/clients/{cid}/benchmarks").json()}
     assert rows["031-001-001"]["hours"] == 2.5 and rows["031-001-001"]["source"] == "licensed:import"
     assert up("vmrs_code,benchmark_hours\n031-001-001,9\n").json() == {"imported": 1}   # re-import replaces
+
+
+# ---- artifact W2: "check extraction first" must not depend on the invoice still being un-checked
+def _math_flag_on_a_line(world, score, field="line_total", needs_review=False):
+    from app.models import FieldConfidence
+
+    with client_session(world["a"]) as db:
+        inv = add_invoice(db, "X1", date(2026, 1, 5), unit="U1", lines=[("R&R water pump", "042-001-002", D("2.0"), D("100"), D("70"), D("300"))], total=D("300"))
+        line = db.scalars(select(InvoiceLine).where(InvoiceLine.invoice_id == inv.id)).first()          # parts 70 + labour 200 = 270, printed 300
+        db.add(FieldConfidence(record_type="line", record_id=line.id, field=field, score=score, needs_review=needs_review))
+        db.commit()
+    with client_session(world["a"]) as db:
+        run_flag_engine(db)
+        db.commit()
+        return [f for f in db.scalars(select(Flag)) if f.type.value == "math_error" and f.line_id is not None][0].details.get("extraction_uncertain")
+
+
+def test_a_low_score_still_marks_the_flag_after_the_invoice_was_marked_checked(world):
+    assert _math_flag_on_a_line(world, score=0.6, needs_review=False) == ["line_total"]      # needs_review was cleared by "mark as checked"; the score was not
+
+
+def test_a_field_the_analyst_edited_is_no_longer_uncertain(world):
+    assert not _math_flag_on_a_line(world, score=1.0, needs_review=False)
+
+
+def test_a_field_that_is_simply_not_on_the_invoice_is_not_uncertain(world):
+    assert not _math_flag_on_a_line(world, score=0.0, field="qty", needs_review=False)
+
+
+# ---- artifact L7: two flags with identical evidence (a re-billed copy, the same job on two invoices) must not crash the whole run
+def test_two_flags_with_identical_evidence_do_not_crash_the_run(world):
+    FakeProvider.reset()
+    FakeProvider.explain_scripted = [json.dumps({"items": [{"index": i, "reason": "This is a likely billing issue worth a look.", "ai_score": 0.7} for i in range(15)]})] * 5
+    with client_session(world["a"]) as db:
+        for num, dt, unit in (("A1", date(2026, 1, 5), "U1"), ("A2", date(2026, 2, 9), "U2")):   # two different jobs, same numbers: identical evidence, not duplicates
+            add_invoice(db, num, dt, unit=unit, lines=[("R&R water pump", "042-001-002", D("2.0"), D("100"), None, D("100"))], total=D("100"))
+        db.commit()
+    with client_session(world["a"]) as db:
+        summary = run_flag_engine(db)
+        db.commit()
+        flags = [f for f in db.scalars(select(Flag)) if f.type.value == "math_error"]
+        assert len(flags) == 2 and all(f.plain_english_reason.startswith("This is a likely billing issue") for f in flags)
+        assert summary["flags"] >= 2

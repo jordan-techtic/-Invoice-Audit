@@ -1,11 +1,13 @@
 import csv
 import io
 import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Literal
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .. import audit
@@ -28,6 +30,10 @@ def admin_only(client_id: uuid.UUID, user: User = Depends(current_user), _db: Se
 
 @router.post("/run-flags", status_code=202)
 def run_flags(client_id: uuid.UUID, request: Request, db: Session = Depends(client_db)):
+    busy = db.scalar(select(FlagRun.id).where(FlagRun.status.in_(["queued", "running"]),
+                                              func.coalesce(FlagRun.started_at, FlagRun.created_at) > datetime.now(timezone.utc) - timedelta(minutes=15)).limit(1))
+    if busy is not None:   # two runs at once delete and rebuild the same baselines and flags; a run stuck for 15 minutes is treated as dead
+        raise HTTPException(409, "The checks are already running for this client. Wait for them to finish, then run them again.")
     run = FlagRun(status="queued")
     db.add(run)
     db.commit()
@@ -65,7 +71,10 @@ def list_flags(client_id: uuid.UUID, type: str | None = None, status: str | None
         q = q.where(Invoice.shop_name_raw == shop)
     if unit:
         q = q.where(Invoice.unit_number == unit)
-    q = q.order_by(Flag.estimated_dollar_impact.asc() if sort == "impact_asc" else Flag.estimated_dollar_impact.desc(), Flag.created_at)
+    if sort == "score_desc":   # the AI's view of how likely each flag is a real issue; flags it did not score go last
+        q = q.order_by(Flag.ai_score.desc().nulls_last(), Flag.estimated_dollar_impact.desc(), Flag.created_at)
+    else:
+        q = q.order_by(Flag.estimated_dollar_impact.asc() if sort == "impact_asc" else Flag.estimated_dollar_impact.desc(), Flag.created_at)
     rows = db.execute(q).all()
 
     # Totals are plain sums of flag amounts, the same rule the report uses, so the screen and the report always agree.
@@ -96,17 +105,19 @@ class RuleIn(BaseModel):
     component: str = Field(min_length=1, max_length=200)
     months: int = Field(ge=1, le=240)
     miles: int | None = Field(default=None, ge=1)
+    covers: Literal["parts", "parts+labour"] = "parts+labour"
 
 
 class RulePatch(BaseModel):
     component: str | None = Field(default=None, min_length=1, max_length=200)
     months: int | None = Field(default=None, ge=1, le=240)
     miles: int | None = Field(default=None, ge=1)
+    covers: Literal["parts", "parts+labour"] | None = None
     clear_miles: bool = False
 
 
 def _rule(r: WarrantyRule) -> dict:
-    return {"id": str(r.id), "vmrs_code": r.vmrs_code, "component": r.component, "months": r.months, "miles": r.miles}
+    return {"id": str(r.id), "vmrs_code": r.vmrs_code, "component": r.component, "months": r.months, "miles": r.miles, "covers": r.covers}
 
 
 @router.get("/warranty-rules")
@@ -132,7 +143,7 @@ def edit_rule(client_id: uuid.UUID, rule_id: uuid.UUID, body: RulePatch, request
     r = db.get(WarrantyRule, rule_id)
     if r is None:
         raise HTTPException(404, "Warranty rule not found.")
-    for k in ("component", "months", "miles"):
+    for k in ("component", "months", "miles", "covers"):
         v = getattr(body, k)
         if v is not None:
             setattr(r, k, v)
@@ -159,9 +170,9 @@ def delete_rule(client_id: uuid.UUID, rule_id: uuid.UUID, request: Request, _: U
 @router.get("/benchmarks")
 def list_benchmarks(client_id: uuid.UUID, db: Session = Depends(client_db)):
     names = {c.code: c.component for c in db.scalars(select(VmrsCode))}
-    rows = db.scalars(select(LabourBenchmark).order_by(LabourBenchmark.vmrs_code)).all()
-    return [{"vmrs_code": b.vmrs_code, "component": names.get(b.vmrs_code, b.vmrs_code), "hours": float(b.benchmark_hours),
-             "source": b.source, "sample_count": b.sample_count} for b in rows]
+    rows = db.scalars(select(LabourBenchmark).order_by(LabourBenchmark.vmrs_code, LabourBenchmark.vehicle_class.nulls_first())).all()
+    return [{"id": str(b.id), "vmrs_code": b.vmrs_code, "component": names.get(b.vmrs_code, b.vmrs_code), "vehicle_class": b.vehicle_class,
+             "hours": float(b.benchmark_hours), "source": b.source, "sample_count": b.sample_count} for b in rows]
 
 
 @router.post("/benchmarks/import")

@@ -184,3 +184,122 @@ def test_math_subtotal_and_total_errors_make_one_invoice_flag():
 
 def test_math_tolerance_allows_rounding():
     assert math_errors.run(ctx([I(lines=[L(total=100.00)], subtotal=100.00, tax=8.25, total=108.74)])) == []
+
+
+# ---------------------------------------------------------------- rule 6: maths, subtotal read from a footer row (artifact X1, L2, X4)
+# Most shops print "Parts / Labor / Tax / TOTAL DUE" and no Subtotal row, so a stored subtotal may really be one of those footer rows.
+def test_math_subtotal_that_is_the_parts_row_is_not_an_error_when_lines_plus_tax_equal_the_total():
+    inv = I(lines=[L(n=1, total=372.87), L(n=2, hours=3.5, rate=111, total=388.50)], subtotal=372.87, tax=31.69, total=793.06)   # invoice 37911
+    assert math_errors.run(ctx([inv])) == []
+
+
+def test_math_subtotal_that_is_the_total_due_row_is_not_an_error_when_lines_plus_tax_equal_the_total():
+    inv = I(lines=[L(n=1, total=49.74), L(n=2, total=43.00)], subtotal=96.83, tax=4.09, total=96.83)                              # PE-56950
+    assert math_errors.run(ctx([inv])) == []
+
+
+def test_math_without_a_subtotal_compares_lines_plus_tax_with_the_total():
+    wrong = I(lines=[L(n=1, total=100), L(n=2, total=100)], subtotal=None, tax=10, total=260)
+    f = math_errors.run(ctx([wrong]))
+    assert len(f) == 1 and f[0].line_id is None and f[0].impact == D("50.00")
+    assert math_errors.run(ctx([I(lines=[L(n=1, total=100), L(n=2, total=100)], subtotal=None, tax=10, total=210)])) == []
+
+
+def test_math_under_billing_is_not_recoverable_money():
+    under = I(lines=[L(total=100)], subtotal=100, tax=8.25, total=100)            # the shop charged LESS than its own subtotal + tax
+    assert math_errors.run(ctx([under])) == []
+    over = I(lines=[L(total=100)], subtotal=100, tax=8.25, total=120)
+    assert [f.impact for f in math_errors.run(ctx([over]))] == [D("11.75")]
+
+
+def test_math_missing_tax_is_not_assumed_to_be_zero():
+    assert math_errors.run(ctx([I(lines=[L(total=100)], subtotal=100, tax=None, total=108.25)])) == []
+
+
+def test_math_both_visible_line_printed_below_its_parts_and_labour_is_not_over_billing():
+    assert math_errors.run(ctx([I(lines=[L(qty=2, price=50, hours=1, rate=100, total=120)], subtotal=120, tax=0, total=120)])) == []   # 150 or 200 expected, 120 printed
+
+
+def test_math_zero_parts_price_is_treated_as_not_printed():
+    # 'Annual DOT insp' has no parts price on the page; a stored 0.0 must not make the line look like "parts and labour both visible"
+    line = L(qty=2.8, price=0.0, hours=2.8, rate=140, total=520)
+    assert math_errors.run(ctx([I(lines=[line], subtotal=None, tax=0, total=520)])) == []
+
+
+def test_math_header_gap_already_explained_by_line_flags_is_not_counted_twice():
+    inv = I(lines=[L(n=1, qty=1, price=70, hours=1, rate=100, total=200)], subtotal=230, tax=0, total=230)   # the line is 30 over (170 expected); the subtotal repeats that 30
+    f = math_errors.run(ctx([inv]))
+    assert [(x.line_id, x.impact) for x in f] == [("i1-l1", D("30.00"))]
+
+
+# ---------------------------------------------------------------- artifact L1: one set of dollars, counted once
+def test_a_duplicate_invoice_does_not_also_carry_its_own_line_flags():
+    mk = lambda i, order: I(i, order, num="77", dt=d(2026, 1, 5), lines=[L(i, 1, qty=1, price=70, hours=1, rate=100, total=200)], subtotal=200, tax=0, total=200)   # line is 30 over
+    drafts = run_rules(ctx([mk("a", 0), mk("b", 1)]))
+    assert [x.type for x in drafts if x.invoice_id == "b"] == ["duplicate"]       # the copy is flagged once, for its whole total
+    assert [x.type for x in drafts if x.invoice_id == "a"] == ["math_error"]      # the original keeps its own finding
+
+
+def test_annual_inspections_and_trailer_pm_are_routine_work_not_repeat_repairs_by_default():
+    from app.models import DEFAULT_CLIENT_SETTINGS
+
+    assert {"000-001-001", "000-001-002", "045-001-009"} <= set(DEFAULT_CLIENT_SETTINGS["repeat_exclude_codes"])
+
+
+# ---------------------------------------------------------------- artifact L3 root cause: a part has a POSITION, and "inspect" is not a replacement
+from app.flags.rules import history as _history  # noqa: E402
+
+
+def test_left_front_and_right_front_are_different_positions_but_unknown_is_not_a_conflict():
+    assert _history.positions_conflict("R&R brake chamber LF", "R&R brake chamber RF")
+    assert _history.positions_conflict("R/R BRK CHMBR - DRVR FRT", "R/R BRK CHMBR - PASS FRT")
+    assert _history.positions_conflict("Brake chamber front", "Brake chamber rear")
+    assert not _history.positions_conflict("Brake chamber LF", "Brake chamber left front")
+    assert not _history.positions_conflict("Brake chamber", "Brake chamber LF")          # one side unknown: still the same job as far as we can tell
+    assert not _history.positions_conflict("R&R alternator", "RPLC ALT")                 # "R&R" is remove-and-replace, not a position
+
+
+def test_inspecting_is_not_replacing():
+    h = _history.is_replacement
+    assert h("R&R brake chamber") and h("Replace alternator") and h("RPLC ALT") and h("Brake chamber")
+    assert not h("Inspect brake chambers") and not h("Check alternator output") and not h("Adjust brakes")
+    assert h("Inspect and replace brake chamber")
+
+
+def _pair_desc(d1, d2, days=30):
+    a = I("a", 0, num="1", dt=d(2025, 3, 1), odo=100000, lines=[L("a", code="013-001-007", desc=d1, total=300)])
+    b = I("b", 1, num="2", dt=d(2025, 3, 1 + days), odo=101000, lines=[L("b", code="013-001-007", desc=d2, total=300)])
+    return [a, b]
+
+
+def test_the_same_job_on_a_different_wheel_position_is_not_a_repeat_repair():
+    assert repeat.run(ctx(_pair_desc("R&R brake chamber LF", "R&R brake chamber RF"))) == []
+    assert len(repeat.run(ctx(_pair_desc("R&R brake chamber LF", "R&R brake chamber left front")))) == 1
+    assert len(repeat.run(ctx(_pair_desc("R&R brake chamber", "R&R brake chamber")))) == 1       # no position printed: unchanged
+
+
+def test_an_inspection_followed_by_a_replacement_is_not_a_repeat_repair():
+    assert repeat.run(ctx(_pair_desc("Inspect brake chambers", "R&R brake chamber"))) == []
+
+
+def test_two_invoices_for_the_same_job_on_the_same_day_are_not_a_repeat_repair():
+    assert repeat.run(ctx(_pair_desc("R&R brake chamber", "R&R brake chamber", days=0))) == []      # same day: a continuation or a re-bill, which the duplicate rule covers
+
+
+# ---------------------------------------------------------------- artifact L10 root cause: a shop number alone does not make a duplicate
+def test_the_same_invoice_number_with_nothing_else_in_common_is_not_a_duplicate():
+    a = I("a", 0, num="7", dt=d(2026, 1, 5), unit="U1", total=100, lines=[L("a", total=100)])
+    b = I("b", 1, num="7", dt=d(2026, 5, 20), unit="U2", total=250, lines=[L("b", total=250)])     # a shop that restarted its numbering
+    assert duplicate.run(ctx([a, b])) == []
+
+
+def test_the_same_number_and_the_same_total_is_a_duplicate():
+    a = I("a", 0, num="7", dt=d(2026, 1, 5), unit="U1", total=100, lines=[L("a", total=100)])
+    b = I("b", 1, num="7", dt=d(2026, 1, 9), unit="U1", total=100, lines=[L("b", total=100)])     # re-dated copy
+    assert [f.impact for f in duplicate.run(ctx([a, b]))] == [D("100")]
+
+
+def test_a_duplicate_with_no_amount_does_not_create_a_zero_dollar_flag():
+    a = I("a", 0, num="7", dt=d(2026, 1, 5), unit="U1", total=None, lines=[L("a", total=None)])
+    b = I("b", 1, num="7", dt=d(2026, 1, 5), unit="U1", total=None, lines=[L("b", total=None)])
+    assert [f for f in duplicate.run(ctx([a, b])) if f.impact == 0] == []

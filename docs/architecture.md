@@ -12,7 +12,7 @@ Worker (RQ)  : process_upload, run_flags          Maintenance loop : raw-file re
 
 **Checks.** Reference data (labour benchmarks, parts baselines) is recomputed from the client's own invoices, then six rule modules run on plain data views, then the AI explains and scores each flag (the AI never creates a flag). Flags are stored with the evidence numbers and the dedupe key, so re-runs update open flags and never touch an analyst's decision.
 
-**Review and report.** An analyst accepts, dismisses or edits each flag. A report can only be created when no flag is open; it is a frozen snapshot of the accepted flags (amounts as edited), rendered as a web page and a PDF from the same data.
+**Review and report.** An analyst accepts, dismisses or edits each flag. A report can only be created when no flag is open and no accepted flag rests on numbers that were corrected afterwards; it is a frozen snapshot of the accepted flags (amounts as edited), rendered as a web page and a PDF from the same data. The snapshot carries a fingerprint of the decisions it was built from, so the app can show it as out of date, and a new version turns the older public link off. Per-client settings and reference data are described in `docs/client-settings.md`.
 
 **Provider swap.** `ExtractionProvider` has four methods (read a page, classify lines, explain flags, write report paragraphs). `OpenAIVisionProvider` and `ClaudeVisionProvider` implement them; a Textract or Azure Document Intelligence adapter would implement the page-reading method and delegate the text methods. Prompts live in `api/app/prompts/*.txt`.
 

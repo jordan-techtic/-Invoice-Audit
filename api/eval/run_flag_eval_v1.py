@@ -6,7 +6,7 @@ extraction. This isolates the RULES from reading errors. Run against the *test* 
   DATABASE_URL=postgresql+psycopg://audit:audit@127.0.0.1:5432/audit_test \
   python -m eval.run_flag_eval_v1 --dataset /path/to/synthetic_dataset_v1 [--config defaults|aligned] [--bench median|published]
 
---config defaults : the app's shipped client settings and default warranty rules (what a new client gets).
+--config defaults : the app's shipped client settings and no warranty rules (what a new client gets).
 --config aligned  : thresholds from the dataset's master/thresholds_and_rules.json, warranty rules from warranty_rules.csv,
                     routine jobs (PM / inspection / service) excluded from the repeat rule.
 --bench median    : labour benchmark = the client's own median per VMRS code (the app's normal behaviour).
@@ -38,7 +38,6 @@ from app.models import (  # noqa: E402
     DEFAULT_CLIENT_SETTINGS, Client, Flag, FlagRun, Invoice, InvoiceLine, LabourBenchmark, WarrantyRule,
 )
 from app.seed import seed_vmrs  # noqa: E402
-from app.services.defaults import ensure_default_warranty_rules  # noqa: E402
 
 D = lambda x: None if x is None else Decimal(str(x))  # noqa: E731
 
@@ -89,7 +88,7 @@ def main() -> None:
         db.add(c)
         db.flush()
         if a.config == "defaults":
-            ensure_default_warranty_rules(db, c.id)
+            pass  # a new client starts with no warranty rules: terms come from an import
         else:
             comp_code = {}
             for t in truth:

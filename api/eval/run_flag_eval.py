@@ -26,7 +26,6 @@ from app.config import get_settings  # noqa: E402
 from app.db import client_session, system_session  # noqa: E402
 from app.models import DEFAULT_CLIENT_SETTINGS, Client, Flag, FlagRun, Invoice, InvoiceLine  # noqa: E402
 from app.seed import seed_vmrs  # noqa: E402
-from app.services.defaults import ensure_default_warranty_rules  # noqa: E402
 from app.services.normalize import normalize_description  # noqa: E402
 
 PLANT_TO_FLAG = {"inflated_hours": "labour_over_benchmark", "repeat_repair": "repeat_repair", "warranty_case": "warranty_eligible",
@@ -75,11 +74,12 @@ def main() -> None:
                    settings=dict(DEFAULT_CLIENT_SETTINGS))
         db.add(c)
         db.flush()
-        ensure_default_warranty_rules(db, c.id)
         if a.warranty == "aligned":
             from app.models import WarrantyRule
 
-            db.execute(delete(WarrantyRule).where(WarrantyRule.client_id == c.id, WarrantyRule.vmrs_code.notin_(["031-001-001", "032-001-001", "042-001-002", "041-001-003"])))
+            for code, comp, months, miles in [("031-001-001", "Alternator", 12, 100_000), ("032-001-001", "Starter motor", 12, 100_000),
+                                              ("042-001-002", "Water pump", 12, 100_000), ("041-001-003", "Turbocharger", 24, 250_000)]:
+                db.add(WarrantyRule(client_id=c.id, vmrs_code=code, component=comp, months=months, miles=miles))
         db.commit()
         cid = c.id
 

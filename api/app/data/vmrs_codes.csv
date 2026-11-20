@@ -1,4 +1,6 @@
 code,system,component,keywords
+000-001-001,General,Annual DOT inspection,dot annual inspection;annual dot inspection;annual inspection;dot inspection;dot annual insp;annual dot insp;fhwa annual inspection;fhwa annual insp;fhwa annual
+000-001-002,General,Trailer preventive maintenance,trailer pm inspection;trailer pm;pm trailer;trailer inspection
 001-001-001,Air conditioning heating and ventilating,A/C compressor,ac compressor;a/c compressor;air conditioning compressor
 001-001-002,Air conditioning heating and ventilating,A/C condenser,ac condenser;condenser
 001-001-003,Air conditioning heating and ventilating,A/C evaporator,evaporator
@@ -11,7 +13,8 @@ code,system,component,keywords
 002-001-002,Cab and sheet metal,Side mirror,mirror;side mirror
 002-001-003,Cab and sheet metal,Door latch and handle,door latch;door handle
 002-001-004,Cab and sheet metal,Hood and hood hinge,hood;hood hinge
-002-001-005,Cab and sheet metal,Wiper motor,wiper motor;wipers;wiper blade
+002-001-005,Cab and sheet metal,Wiper motor,wiper motor
+002-001-006,Cab and sheet metal,Wiper blades,wiper blade;wiper blades;wipers
 002-002-001,Cab and sheet metal,Driver seat,seat;driver seat;air seat
 002-003-001,Cab and sheet metal,Cab air suspension,cab air bag;cab suspension;cab shock
 003-001-001,Instruments gauges and warning devices,Instrument cluster,instrument cluster;dash cluster;gauge cluster
@@ -36,6 +39,7 @@ code,system,component,keywords
 014-001-001,Frame,Frame rail repair,frame;frame rail;crossmember
 014-001-002,Frame,Fifth wheel,fifth wheel;5th wheel
 014-001-003,Frame,Mud flaps and brackets,mud flap;splash guard
+014-001-004,Frame,Landing gear,landing gear;landing leg;landing legs
 015-001-001,Steering,Power steering pump,power steering pump;ps pump
 015-001-002,Steering,Steering gear,steering gear;steering box
 015-001-003,Steering,Tie rod end,tie rod;tie rod end;cross tube
@@ -73,7 +77,7 @@ code,system,component,keywords
 026-001-003,Transmission manual,Transmission seal,trans seal;rear seal;output seal
 027-001-001,Transmission automatic,Automated transmission,automatic transmission;amt;allison
 027-001-002,Transmission automatic,Transmission service,trans service;transmission fluid;trans filter
-031-001-001,Charging system,Alternator,alternator;charging
+031-001-001,Charging system,Alternator,alternator;alt replacement;charging system repair
 031-001-002,Charging system,Alternator belt,alternator belt
 031-002-001,Charging system,Battery,battery;batteries
 031-002-002,Charging system,Battery cables,battery cable;ground strap;battery terminal
@@ -92,22 +96,27 @@ code,system,component,keywords
 042-001-004,Cooling system,Coolant hoses,coolant hose;radiator hose;heater hose
 042-001-005,Cooling system,Fan clutch,fan clutch;fan hub;fan drive
 042-001-006,Cooling system,Coolant service,coolant flush;antifreeze;coolant
-043-001-001,Exhaust system,Diesel particulate filter,dpf;particulate filter;dpf clean
-043-001-002,Exhaust system,DEF/SCR system,def pump;scr;def doser;def;nox sensor;def fault;def dosing;dosing valve;def system
-043-001-003,Exhaust system,EGR valve and cooler,egr;egr valve;egr cooler
+043-001-001,Exhaust system,Diesel particulate filter,dpf;particulate filter;dpf filter
+043-001-002,Exhaust system,DEF/SCR system,def pump;scr;def doser;def;def fault;def dosing;dosing valve;def system
+043-001-003,Exhaust system,EGR valve,egr;egr valve
 043-001-004,Exhaust system,Exhaust pipe and clamps,exhaust pipe;muffler;exhaust clamp
+043-001-005,Exhaust system,DPF cleaning,dpf clean;clean & bake;clean and bake;dpf bake;dpf cleaning
+043-001-006,Exhaust system,NOx sensor,nox sensor;nox
+043-001-007,Exhaust system,EGR cooler,egr cooler
 044-001-001,Fuel system,Fuel injector,injector;fuel injector
 044-001-002,Fuel system,Fuel filter,fuel filter;water separator
 044-001-003,Fuel system,Fuel pump,fuel pump;lift pump
 044-001-004,Fuel system,Fuel tank and straps,fuel tank;tank strap
-045-001-001,Power plant,Engine oil and filter service,oil change;pm service;lube oil filter;preventive maintenance;pm svc;pm service;chassis lube;lube oil;oil and filter;oil & filter;lube job;pm-a;pm-b
+045-001-001,Power plant,Engine oil and filter service,oil change;pm service;lube oil filter;preventive maintenance;pm svc;pm service;chassis lube;lube oil;oil and filter;oil & filter;lube job;pm-a;pm a;pm a svc
 045-001-002,Power plant,Engine overhaul,overhaul;in-frame;out-of-frame;rebuild engine
 045-001-003,Power plant,Cylinder head,cylinder head;head gasket
 045-001-004,Power plant,Oil pan gasket,oil pan;pan gasket
 045-001-005,Power plant,Engine mounts,engine mount;motor mount
 045-001-006,Power plant,Valve adjustment,overhead;valve adjust;valve lash
-045-001-007,Power plant,Serpentine belt and tensioner,serpentine;belt tensioner;idler pulley;drive belt
+045-001-007,Power plant,Serpentine belt,serpentine;serpentine belt;drive belt
 045-001-008,Power plant,Engine diagnostics,diagnostic;diag;scan;check engine
+045-001-009,Power plant,PM-B service (extended preventive maintenance),pm b;pm b svc;pm b service;pm-b;preventive maintenance b
+045-001-010,Power plant,Belt tensioner,belt tensioner;tensioner;idler pulley
 071-001-001,Body,Liftgate,liftgate;lift gate;tailgate lift
-071-001-002,Body,Trailer door and hinges,trailer door;roll door;swing door
+071-001-002,Body,Trailer door and hinges,trailer door;roll door;swing door;door hinge;rear door
 071-001-003,Body,Reefer unit service,reefer;refrigeration unit;thermo king;carrier unit

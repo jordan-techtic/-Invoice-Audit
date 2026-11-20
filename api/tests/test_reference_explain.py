@@ -60,3 +60,36 @@ def test_evidence_hash_changes_with_evidence_not_with_other_fields():
 
 def test_money_format():
     assert money(330) == "$330" and money(D("12.5")) == "$12.50" and money(1234.5) == "$1,234.50"
+
+
+# ---- artifact L8: the AI's wording may not contradict the numbers the rule found
+def test_sanitize_rejects_a_dollar_figure_that_is_not_in_the_evidence():
+    tmpl = "Possible maths error of $15."
+    assert explain.sanitize("This invoice is likely overbilled by $9,999 on line 7.", tmpl, allowed=[15.32, 154.0]) == tmpl
+
+
+def test_sanitize_accepts_figures_that_match_the_evidence_exactly_or_rounded():
+    assert explain.sanitize("This is a likely maths error of $15.32.", "t", allowed=[15.32]) == "This is a likely maths error of $15.32."
+    assert explain.sanitize("This is a likely maths error of about $15.", "t", allowed=[15.32]) == "This is a likely maths error of about $15."
+    assert explain.sanitize("Billed $1,200.50 where $1,000 is typical; this is a possible overcharge.", "t", allowed=[1200.5, 1000.0]).startswith("Billed $1,200.50")
+
+
+def test_sanitize_without_a_number_list_keeps_the_old_behaviour():
+    assert explain.sanitize("This is a likely issue worth $77.", "t") == "This is a likely issue worth $77."
+
+
+# ---- artifact L4 root cause: the same invoice counted twice, and one invoice's repeated lines counted as many "sightings"
+def _inv(i, shop, num, price, n_lines=1, total=None):
+    return I(i, int(i[-1]) if i[-1].isdigit() else 0, shop=shop, num=num, total=total, lines=[L(i, n + 1, part="P-1", price=price, qty=1, total=price) for n in range(n_lines)])
+
+
+def test_a_copy_of_the_same_invoice_is_not_a_second_sighting_of_the_part():
+    invs = [_inv("i1", "acme", "A1", 10), _inv("i2", "acme", "A2", 12), _inv("i3", "acme", "A2", 12)]       # i3 is a copy of i2
+    assert reference.parts_baselines(invs, min_samples=3) == {}
+
+
+def test_one_invoice_with_the_part_on_three_lines_is_one_sighting():
+    invs = [_inv("i1", "acme", "A1", 10, n_lines=3), _inv("i2", "acme", "A2", 12)]
+    assert reference.parts_baselines(invs, min_samples=3) == {}
+    three = invs + [_inv("i3", "beta", "B1", 11)]
+    assert reference.parts_baselines(three, min_samples=3)["P1"].samples == 3

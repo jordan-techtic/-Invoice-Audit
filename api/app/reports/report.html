@@ -70,22 +70,23 @@ th.num, td.num { text-align: right; }
   <h2>Where the money is</h2>
   {% for title, rows in [("By finding type", s.breakdown.by_type), ("By shop", s.breakdown.by_shop), ("By vehicle", s.breakdown.by_vehicle)] %}
   <div class="block"><h3>{{ title }}</h3>
-  {% set mx = rows[0].amount if rows else 1 %}
+  {% set real = rows | rejectattr("label", "equalto", "Other") | list %}
+  {% set mx = ((real[0].amount if real else rows[0].amount) if rows else 1) or 1 %}
   <table>{% for r in rows %}
-    <tr class="bar-row"><td class="bar-label">{{ r.label }}</td><td><div class="bar{% if loop.first %} hi{% endif %}" style="width: {{ (100 * r.amount / mx) | round(1) }}%"></div></td><td class="num bar-amt">{{ money(r.amount) }}</td></tr>
+    <tr class="bar-row"><td class="bar-label">{{ r.label }}</td><td><div class="bar{% if loop.first %} hi{% endif %}" style="width: {{ [100 * r.amount / mx, 100] | min | round(1) }}%"></div></td><td class="num bar-amt">{{ money(r.amount) }}</td></tr>
   {% endfor %}</table>
   <table style="margin-top:2mm"><tr><th>{{ title[3:]|capitalize }}</th><th class="num">Findings</th><th class="num">Amount</th></tr>
     {% for r in rows %}<tr><td>{{ r.label }}</td><td class="num">{{ r.count }}</td><td class="num">{{ money(r.amount) }}</td></tr>{% endfor %}</table></div>
   {% endfor %}
 </section>
 
-<section class="break">
+<section>
   <h2>What we found and what to do</h2>
   {% for n in s.narratives %}<h3>{{ n.label }} · {{ n.count }} · {{ money(n.amount) }}</h3><p>{{ n.paragraph }}</p>{% endfor %}
 </section>
 {% endif %}
 
-<section class="break">
+<section>
   <h2>Next steps</h2>
   <p class="pre">{{ s.next_steps.text }}</p>
   <div class="note">{{ s.note }}</div>
@@ -95,7 +96,7 @@ th.num, td.num { text-align: right; }
 <section class="break">
   <h2>Appendix: every confirmed finding</h2>
   <table><tr><th>Invoice</th><th>Date</th><th>Shop</th><th>Unit</th><th>What we found</th><th class="num">Amount</th></tr>
-  {% for a in s.appendix %}<tr><td>{{ a.invoice_number }}</td><td>{{ a.date }}</td><td>{{ a.shop }}</td><td>{{ a.unit }}</td><td>{{ a.reason }}</td><td class="num">{{ money(a.amount) }}</td></tr>{% endfor %}</table>
+  {% for a in s.appendix %}<tr><td>{{ a.invoice_number or "n/a" }}</td><td>{{ a.date or "n/a" }}</td><td>{{ a.shop or "n/a" }}</td><td>{{ a.unit or "n/a" }}</td><td>{{ a.reason }}</td><td class="num">{{ money(a.amount) }}</td></tr>{% endfor %}</table>
 </section>
 {% endif %}
 </body></html>

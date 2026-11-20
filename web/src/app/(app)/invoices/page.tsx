@@ -88,7 +88,8 @@ function List({ cid }: { cid: string }) {
   async function doCheck() {
     const r = await api.bulkCheck(cid, chosen.map((x) => x.id));
     setDialog(null); setSelected(new Set()); setReloadKey((k) => k + 1); void progress?.refresh();
-    const done = `${plural(r.checked)} marked as checked.${r.already_checked ? ` ${plural(r.already_checked)} ${r.already_checked === 1 ? "was" : "were"} already checked.` : ""}`;
+    const blockedNote = r.blocked?.length ? ` ${plural(r.blocked.length)} not marked: ${r.blocked.length === 1 ? "it still has" : "they still have"} fields marked Check. Open ${r.blocked.length === 1 ? "it" : "each"} and fix or confirm each field, or confirm the numbers as printed.` : "";
+    const done = `${plural(r.checked)} marked as checked.${r.already_checked ? ` ${plural(r.already_checked)} ${r.already_checked === 1 ? "was" : "were"} already checked.` : ""}${blockedNote}`;
     setNotice(done);
     setChecksDone(false);
     // When nothing is left to check, the audit checks start on their own.
@@ -279,7 +280,7 @@ function List({ cid }: { cid: string }) {
       )}
 
       <ConfirmDialog open={dialog === "check"} title={`Mark ${plural(eligibleToCheck)} as checked?`}
-        body="This confirms that every highlighted field on these invoices is right as read, or has been fixed. Look at the invoices first if you are not sure."
+        body="Invoices with no field marked Check are marked as checked. An invoice that still has a field marked Check is left as it is: open it and fix or confirm each field first."
         actionLabel={`Mark ${eligibleToCheck} as checked`} onConfirm={doCheck} onClose={() => setDialog(null)} />
       <ConfirmDialog open={dialog === "delete"} danger title={`Delete ${plural(chosen.length)}?`}
         body="This permanently deletes the selected invoices with their lines and any flags on them. The original uploaded files are kept. Reports that were already created do not change. This cannot be undone."

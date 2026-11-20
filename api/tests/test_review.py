@@ -1,7 +1,7 @@
 from sqlalchemy import select
 
 from app.db import client_session
-from app.models import Flag, FlagStatus
+from app.models import Flag, FlagStatus, Invoice, ReviewStatus
 from app.services.extraction.fake import FakeProvider
 
 from .test_flags_engine import seed_world
@@ -10,6 +10,10 @@ from .test_flags_engine import seed_world
 def setup_flags(admin_client, cid):
     FakeProvider.reset()
     seed_world(cid)
+    with client_session(cid) as db:   # the app only runs the checks once every invoice has been looked at, so the seeded invoices are reviewed
+        for inv in db.scalars(select(Invoice)):
+            inv.review_status = ReviewStatus.reviewed
+        db.commit()
     assert admin_client.post(f"/clients/{cid}/run-flags").status_code == 202
     flags = admin_client.get(f"/clients/{cid}/flags").json()["flags"]
     assert len(flags) >= 2
@@ -95,8 +99,7 @@ def test_fix_field_then_recheck_updates_only_that_invoice(admin_client, world):
     det = admin_client.get(f"/clients/{cid}/flags/{lab['id']}").json()
     inv = f"/clients/{cid}/invoices/{lab['invoice_id']}"
     assert admin_client.patch(f"{inv}/fields", json={"field": "labour_hours", "value": "2.0", "line_id": det["line"]["id"]}).status_code == 200
-    r = admin_client.post(f"{inv}/recheck").json()
-    assert r["removed"] >= 1
+    # the edit itself refreshes the flags that rested on the corrected number (artifact W4); a manual recheck afterwards has nothing left to do
     after = admin_client.get(f"/clients/{cid}/flags").json()["flags"]
     assert lab["id"] not in {f["id"] for f in after}                      # the fixed finding is gone
     assert others_before <= {f["id"] for f in after}                      # other invoices' flags were not touched
@@ -155,3 +158,34 @@ def test_bulk_accept_dismiss_reopen(admin_client, world):
     assert admin_client.get(f"/clients/{cid}/flags/{ids[0]}").json()["status"] == "open"
     ops = [(r_["detail"] or {}).get("op") for r_ in audit_rows(admin_client, cid)]
     assert {"bulk_accept", "bulk_dismiss", "bulk_reopen"} <= set(ops)
+
+
+# ---- artifact W3: a flag built on numbers the extraction was unsure about must not reach the client report unseen
+def _mark_doubtful(cid, flag_id):
+    with client_session(cid) as db:
+        f = db.get(Flag, flag_id)
+        f.details = {**(f.details or {}), "extraction_uncertain": ["line_total"]}
+        db.commit()
+
+
+def test_a_flag_built_on_doubtful_numbers_cannot_be_accepted_without_confirming_the_extraction(admin_client, world):
+    cid = world["a"]
+    a = setup_flags(admin_client, cid)[0]
+    _mark_doubtful(cid, a["id"])
+    r = admin_client.post(f"/clients/{cid}/flags/{a['id']}/accept", json={})
+    assert r.status_code == 409 and "hard to read" in r.json()["detail"]
+    with client_session(cid) as db:
+        assert db.get(Flag, a["id"]).status == FlagStatus.open
+    ok = admin_client.post(f"/clients/{cid}/flags/{a['id']}/accept", json={"extraction_checked": True})
+    assert ok.status_code == 200 and ok.json()["status"] == "accepted"
+
+
+def test_bulk_accept_skips_doubtful_flags_and_lists_them(admin_client, world):
+    cid = world["a"]
+    flags = setup_flags(admin_client, cid)
+    _mark_doubtful(cid, flags[0]["id"])
+    ids = [flags[0]["id"], flags[1]["id"]]
+    r = admin_client.post(f"/clients/{cid}/flags/bulk", json={"ids": ids, "action": "accept"}).json()
+    assert r["changed"] == 1 and r["needs_extraction_check"] == [flags[0]["id"]]
+    r2 = admin_client.post(f"/clients/{cid}/flags/bulk", json={"ids": ids, "action": "accept", "extraction_checked": True}).json()
+    assert r2["changed"] == 1 and "needs_extraction_check" not in r2

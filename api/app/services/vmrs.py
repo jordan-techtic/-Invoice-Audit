@@ -28,7 +28,8 @@ class Classification:
 
 
 def _kw_pattern(kw: str) -> re.Pattern:
-    return re.compile(r"(?<![a-z0-9])" + re.escape(kw.lower()) + r"(?:s|es)?(?![a-z0-9])")  # tolerate plurals
+    # Keywords are cleaned the same way as descriptions, so "pm-a" or "u-joint" can match "PM-A service" / "R&R U-joint".
+    return re.compile(r"(?<![a-z0-9])" + re.escape(normalize_description(kw)) + r"(?:s|es)?(?![a-z0-9])")  # tolerate plurals
 
 
 def load_codes(db: Session) -> list[VmrsCode]:
@@ -43,7 +44,7 @@ def lookup(norm_desc: str, codes: list[VmrsCode]) -> Classification | None:
     """Keyword match. Longest keyword wins; two different codes tied on the longest keyword => ambiguous => None."""
     best_len, best = 0, set()
     for c in codes:
-        for kw in filter(None, (k.strip() for k in c.keywords.split(";"))):
+        for kw in filter(None, (normalize_description(k) for k in c.keywords.split(";"))):
             if len(kw) >= best_len and _kw_pattern(kw).search(norm_desc):
                 if len(kw) > best_len:
                     best_len, best = len(kw), set()

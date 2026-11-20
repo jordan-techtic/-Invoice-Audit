@@ -16,6 +16,28 @@ def run(ctx: Context) -> list[FlagDraft]:
     invs = sorted(ctx.invoices, key=lambda i: i.order)
     flagged: set[str] = set()
 
+    window = max(0, int(ctx.config.get("duplicate_window_days", 0) or 0))
+
+    def emit(dup: InvoiceView, first: InvoiceView, how: str, same: str) -> None:
+        amt = dup.total if dup.total is not None else Decimal(0)
+        if amt <= 0:
+            return   # no amount to double-pay: a $0 flag is noise
+        flagged.add(dup.id)
+        out.append(FlagDraft(
+            type="duplicate", invoice_id=dup.id, line_id=None, related_invoice_id=first.id, impact=amt,
+            dedupe_key=f"dup_invoice:{dup.id}",
+            evidence={"match": how, "invoice_number": dup.invoice_number, "original_invoice_number": first.invoice_number,
+                      "date": str(dup.invoice_date), "total": float(amt), **({"window_days": window} if how == "same_job_window" else {})},
+            template_reason=(f"Invoice {dup.invoice_number or ''} looks like a likely duplicate of an invoice already processed "
+                             f"({same}). Possible double billing of {money(amt)}.").replace("Invoice  looks", "This invoice looks"),
+        ))
+
+    def corroborated(a: InvoiceView, b: InvoiceView) -> bool:
+        """The same total, or the same unit on the same date."""
+        if a.total is not None and b.total is not None and a.total == b.total:
+            return True
+        return bool(a.unit_key and a.unit_key == b.unit_key and a.invoice_date and a.invoice_date == b.invoice_date)
+
     def group_by(keyfn) -> None:
         groups: dict[tuple, list[InvoiceView]] = {}
         for inv in invs:
@@ -23,22 +45,29 @@ def run(ctx: Context) -> list[FlagDraft]:
             if k:
                 groups.setdefault(k, []).append(inv)
         for members in groups.values():
-            first = members[0]
-            for dup in members[1:]:
+            for k, dup in enumerate(members[1:], start=1):
                 if dup.id in flagged:
                     continue
-                flagged.add(dup.id)
-                amt = dup.total if dup.total is not None else Decimal(0)
                 how = keyfn.__name__
-                out.append(FlagDraft(
-                    type="duplicate", invoice_id=dup.id, line_id=None, related_invoice_id=first.id, impact=amt,
-                    dedupe_key=f"dup_invoice:{dup.id}",
-                    evidence={"match": how, "invoice_number": dup.invoice_number, "original_invoice_number": first.invoice_number,
-                              "date": str(dup.invoice_date), "total": float(amt)},
-                    template_reason=(f"Invoice {dup.invoice_number or ''} looks like a likely duplicate of an invoice already processed "
-                                     f"({'same shop and invoice number' if how == 'same_number' else 'same shop, unit, date and total'}). "
-                                     f"Possible double billing of {money(amt)}.").replace("Invoice  looks", "This invoice looks"),
-                ))
+                # a shop's invoice number alone is not enough (numbering restarts, and a misread digit lands on a used number): something else must agree
+                first = next((m for m in members[:k] if how != "same_number" or corroborated(m, dup)), None)
+                if first is not None:
+                    emit(dup, first, how, "same shop and invoice number" if how == "same_number" else "same shop, unit, date and total")
+
+    def within_window() -> None:
+        """Same shop, unit and total, dated within N days of each other: a re-submission with a new number and/or date."""
+        groups: dict[tuple, list[InvoiceView]] = {}
+        for inv in invs:
+            if inv.shop_key and inv.unit_key and inv.invoice_date and inv.total:
+                groups.setdefault((inv.shop_key, inv.unit_key, inv.total), []).append(inv)
+        for members in groups.values():
+            members.sort(key=lambda i: (i.invoice_date, i.order))
+            for k, dup in enumerate(members):
+                if dup.id in flagged:
+                    continue
+                first = next((m for m in members[:k] if (dup.invoice_date - m.invoice_date).days <= window), None)
+                if first is not None:
+                    emit(dup, first, "same_job_window", f"same shop, unit and total, within {window} days")
 
     def same_number(i: InvoiceView):
         return (i.shop_key, _num(i.invoice_number)) if i.shop_key and _num(i.invoice_number) else None
@@ -47,7 +76,10 @@ def run(ctx: Context) -> list[FlagDraft]:
         return (i.shop_key, i.unit_key, i.invoice_date, i.total) if i.shop_key and i.unit_key and i.invoice_date and i.total else None
 
     group_by(same_number)
-    group_by(same_job)
+    if window > 0:
+        within_window()
+    else:
+        group_by(same_job)
 
     for inv in invs:
         if inv.id in flagged:

@@ -39,7 +39,7 @@ def flag_detail(db: Session, f: Flag, client_id: uuid.UUID) -> dict:
     return {
         "id": str(f.id), "type": f.type.value, "severity": f.severity.value, "status": f.status.value,
         "impact": float(f.estimated_dollar_impact), "original_impact": _j(f.original_impact),
-        "reason": f.plain_english_reason, "original_reason": f.original_reason,
+        "reason": f.plain_english_reason, "original_reason": f.original_reason, "ai_score": f.ai_score,
         "dismiss_reason": f.dismiss_reason, "note": f.analyst_note,
         "reviewed_by": _name(db, f.reviewed_by), "reviewed_at": f.reviewed_at,
         "evidence_lines": evidence_lines(f.type.value, f.details or {}, f.estimated_dollar_impact),
@@ -61,6 +61,11 @@ def _get(db: Session, fid: uuid.UUID) -> Flag:
     if f is None:
         raise HTTPException(404, "Flag not found.")
     return f
+
+
+def _doubtful(f: Flag) -> bool:
+    """The flag rests on numbers the extraction was unsure about (low stored score) that nobody has corrected."""
+    return bool((f.details or {}).get("extraction_uncertain"))
 
 
 def _stamp(db: Session, f: Flag) -> None:
@@ -93,10 +98,15 @@ class EditIn(NoteIn):
     reason: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
+class AcceptIn(NoteIn):
+    extraction_checked: bool = False   # "I looked at the invoice image and the numbers behind this flag are right"
+
+
 class BulkIn(NoteIn):
     ids: list[uuid.UUID] = Field(min_length=1, max_length=500)
     action: str
     reason: str | None = None
+    extraction_checked: bool = False
 
 
 @router.post("/flags/bulk")
@@ -109,7 +119,11 @@ def bulk(client_id: uuid.UUID, body: BulkIn, request: Request, db: Session = Dep
         raise HTTPException(422, "Pick a reason: wrong extraction, shop had a valid reason, not a real issue, or other.")
     flags = list(db.scalars(select(Flag).where(Flag.id.in_(set(body.ids)))).all())
     changed = 0
+    needs_check: list[str] = []
     for f in flags:
+        if body.action == "accept" and _doubtful(f) and not body.extraction_checked and f.status != FlagStatus.accepted:
+            needs_check.append(str(f.id))   # accepting puts it in the client's report: look at the image first
+            continue
         if body.action == "reopen":
             if f.status == FlagStatus.open:
                 continue
@@ -126,12 +140,18 @@ def bulk(client_id: uuid.UUID, body: BulkIn, request: Request, db: Session = Dep
     db.commit()
     audit.record(db, action=body.action if body.action != "reopen" else "edit", object_type="flag",
                  detail={"op": f"bulk_{body.action}", "count": changed, "requested": len(body.ids), "reason": body.reason}, request=request)
-    return {"changed": changed, "unchanged": len(flags) - changed, "skipped": len(set(body.ids)) - len(flags)}
+    out = {"changed": changed, "unchanged": len(flags) - changed - len(needs_check), "skipped": len(set(body.ids)) - len(flags)}
+    if needs_check:
+        out["needs_extraction_check"] = needs_check
+    return out
 
 
 @router.post("/flags/{flag_id}/accept")
-def accept(flag_id: uuid.UUID, client_id: uuid.UUID, body: NoteIn, request: Request, db: Session = Depends(client_db)):
+def accept(flag_id: uuid.UUID, client_id: uuid.UUID, body: AcceptIn, request: Request, db: Session = Depends(client_db)):
     f = _get(db, flag_id)
+    if _doubtful(f) and not body.extraction_checked and f.status != FlagStatus.accepted:
+        raise HTTPException(409, "Some numbers behind this flag were hard to read on the invoice. Check them against the invoice image first: correct a wrong number "
+                                 "(the flag refreshes) or confirm they are right, then accept it.")
     f.status, f.dismiss_reason = FlagStatus.accepted, None
     if body.note is not None:
         f.analyst_note = body.note

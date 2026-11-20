@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 from .config import get_settings
 from .db import CrossClientWriteError, UnscopedQueryError
 from . import logfilter
-from .routers import admin, auth, clients, flags, inbound, invoices, reports, review, uploads, users
+from .routers import admin, auth, clients, flags, inbound, invoices, reference, reports, review, uploads, users
 
 # Never log request bodies or invoice contents. Only method, path and status.
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -47,6 +47,16 @@ async def _isolation_error(request: Request, exc: Exception):
     return JSONResponse({"detail": "This request touched data outside the selected client and was blocked."}, status_code=500)
 
 
+@app.middleware("http")
+async def keep_public_reports_private(request, call_next):
+    """The public report link is a secret address: ask search engines not to index it and browsers not to send it on as a referrer."""
+    response = await call_next(request)
+    if request.url.path.startswith("/public/"):
+        response.headers["X-Robots-Tag"] = "noindex, nofollow"
+        response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 @app.get("/health")
 def health():
     return {"ok": True}
@@ -59,6 +69,7 @@ app.include_router(uploads.router)
 app.include_router(invoices.router)
 app.include_router(inbound.router)
 app.include_router(flags.router)
+app.include_router(reference.router)
 app.include_router(review.router)
 app.include_router(reports.router)
 app.include_router(admin.router)

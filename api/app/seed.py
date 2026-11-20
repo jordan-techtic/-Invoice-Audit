@@ -10,7 +10,6 @@ from sqlalchemy import select
 
 from .db import system_session
 from .models import DEFAULT_CLIENT_SETTINGS, Client, Role, User, UserClient, VmrsCode, WarrantyRule
-from .services.defaults import ensure_default_warranty_rules
 from .security import hash_password
 
 DATA = Path(__file__).parent / "data"
@@ -52,7 +51,6 @@ def main() -> None:
                 c = Client(name=name, slug=slug, inbound_email_token=token, settings=dict(DEFAULT_CLIENT_SETTINGS))
                 db.add(c)
                 db.flush()
-            ensure_default_warranty_rules(db, c.id)
             if slug == "lone-prairie" and not db.get(UserClient, (users[Role.analyst].id, c.id)):
                 db.add(UserClient(user_id=users[Role.analyst].id, client_id=c.id))
         db.commit()

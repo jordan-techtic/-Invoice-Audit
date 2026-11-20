@@ -21,6 +21,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -85,14 +86,19 @@ DEFAULT_CLIENT_SETTINGS: dict = {
     # extraction
     "confidence_threshold": 0.80,
     "math_tolerance": 1.00,
+    "tax_min_invoices": 3,          # other invoices from the same shop needed before its usual tax rate is trusted
+    "tax_rate_tolerance_pct": 0.25, # flag tax charged more than this many percentage points above the shop's usual rate
     # flag rules
     "labour_over_benchmark_pct": 20,
     "labour_min_samples": 5,
     "repeat_repair_days": 90,
     "repeat_repair_miles": 10000,
+    "repeat_condition": "or",     # "or": days OR miles is enough; "and": must be within days AND miles (trailers: days only)
+    "duplicate_window_days": 0,   # 0: a duplicate invoice must have the same date; N: same shop, unit and total within N days
     "repeat_exclude_codes": [  # routine, recurring work: not a "repeat repair"
         "045-001-001", "045-001-008", "044-001-002", "041-001-001", "043-001-001",
         "001-001-005", "017-001-004", "017-001-005", "071-001-003", "042-001-006",
+        "000-001-001", "000-001-002", "045-001-009",   # annual DOT inspection, trailer preventive maintenance, PM-B service
     ],
     "parts_outlier_pct": 25,
     "parts_single_shop_multiple": 1.5,
@@ -212,6 +218,13 @@ class Vehicle(IdMixin, ClientScoped, Base):
     __table_args__ = (UniqueConstraint("client_id", "unit_number", name="uq_vehicle_client_unit"),)
     unit_number: Mapped[str] = mapped_column(String(50), nullable=False)
     vin: Mapped[str | None] = mapped_column(String(17))
+    # Fleet master data (imported from a vehicles CSV in Settings). The rules use the class (per-class labour baselines,
+    # trailers repeat on days only) and the VIN (to find the unit when an invoice prints only the VIN).
+    vehicle_class: Mapped[str | None] = mapped_column(String(30))
+    year: Mapped[int | None] = mapped_column(Integer)
+    make: Mapped[str | None] = mapped_column(String(60))
+    model: Mapped[str | None] = mapped_column(String(80))
+    start_odometer: Mapped[int | None] = mapped_column(Integer)
 
 
 class Invoice(IdMixin, ClientScoped, Base):
@@ -294,11 +307,13 @@ class VmrsCode(Base):
 
 class LabourBenchmark(IdMixin, ClientScoped, Base):
     __tablename__ = "reference_labour_benchmarks"
-    __table_args__ = (UniqueConstraint("client_id", "vmrs_code", "source", name="uq_bench"),)
+    # One value per job code, vehicle class (blank = every vehicle) and source.
+    __table_args__ = (Index("uq_bench", "client_id", "vmrs_code", text("coalesce(vehicle_class, '')"), "source", unique=True),)
     vmrs_code: Mapped[str] = mapped_column(String(11), nullable=False)
+    vehicle_class: Mapped[str | None] = mapped_column(String(30))
     benchmark_hours: Mapped[Decimal] = mapped_column(Numeric(8, 2), nullable=False)
     sample_count: Mapped[int | None] = mapped_column(Integer)
-    source: Mapped[str] = mapped_column(String(50), nullable=False)  # client_median | licensed:<name>
+    source: Mapped[str] = mapped_column(String(50), nullable=False)  # client_median (computed) | licensed:<name> | manual
 
 
 class WarrantyRule(IdMixin, ClientScoped, Base):
@@ -308,6 +323,7 @@ class WarrantyRule(IdMixin, ClientScoped, Base):
     component: Mapped[str] = mapped_column(String(200), nullable=False)
     months: Mapped[int] = mapped_column(Integer, nullable=False)
     miles: Mapped[int | None] = mapped_column(Integer)
+    covers: Mapped[str] = mapped_column(String(12), nullable=False, default="parts+labour", server_default="parts+labour")  # parts | parts+labour
 
 
 class PartsPriceBaseline(IdMixin, ClientScoped, Base):

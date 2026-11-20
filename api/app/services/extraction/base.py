@@ -117,6 +117,7 @@ class ExtractionProvider(ABC):
     model: str = "n/a"
     retries: int = 1
     redact: bool = False  # mask VIN/phone in text payloads (set from AI_REDACT_BEFORE_SEND)
+    second_read: bool = True  # read a page again when its numbers don't add up (the test fake turns this off unless a test asks)
 
     def _r(self, text: str) -> str:
         if not self.redact:
@@ -172,8 +173,9 @@ class ExtractionProvider(ABC):
                 correction = f"Your previous answer was rejected: {last}. Return only the structured result."
         raise ExtractionError(f"Report narrative failed after {self.retries + 1} tries ({last}).")
 
-    def extract_page(self, image: bytes, media_type: str = "image/jpeg") -> PageResult:
-        correction: str | None = None
+    def extract_page(self, image: bytes, media_type: str = "image/jpeg", hint: str | None = None) -> PageResult:
+        """``hint`` is extra guidance for this read (the second read of a page names the numbers that did not add up)."""
+        correction: str | None = hint
         usage, raws = Usage(), []
         last = "unknown"
         for attempt in range(1, self.retries + 2):
@@ -188,7 +190,7 @@ class ExtractionProvider(ABC):
                 correction = (
                     f"Your previous answer was rejected: {last}. "
                     "Return only the structured result that matches the schema exactly."
-                )
+                ) + (f"\n\n{hint}" if hint else "")
         raise ExtractionError(
             f"The AI returned an answer we couldn't read after {self.retries + 1} tries ({last}). "
             "Retry the file; if it fails again, check that the image is legible."

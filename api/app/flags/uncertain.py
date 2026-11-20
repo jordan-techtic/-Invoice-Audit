@@ -23,7 +23,13 @@ INVOICE_FIELDS = {
 
 def uncertain_fields(d: FlagDraft, needs_review: set[tuple[str, str]], lines_of: dict[str, list[str]]) -> list[str]:
     out = []
-    line_ids = [d.line_id] if d.line_id else (lines_of.get(d.invoice_id, []) if d.type == "math_error" or (d.type == "duplicate") else [])
+    whole_invoice = d.type in ("math_error", "duplicate", "repeat_repair", "warranty_eligible")   # these rest on more than the one line the flag points at
+    if d.line_id and not whole_invoice:
+        line_ids = [d.line_id]
+    else:
+        line_ids = list(lines_of.get(d.invoice_id, []))
+        if d.related_invoice_id and d.type in ("repeat_repair", "warranty_eligible"):
+            line_ids += lines_of.get(d.related_invoice_id, [])                                   # the earlier repair's job code matters too
     for lid in line_ids:
         out += [f for f in LINE_FIELDS.get(d.type, []) if (lid, f) in needs_review]
     inv_ids = [d.invoice_id] + ([d.related_invoice_id] if d.related_invoice_id and d.type in ("repeat_repair", "warranty_eligible") else [])

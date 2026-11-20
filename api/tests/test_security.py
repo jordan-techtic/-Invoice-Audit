@@ -35,7 +35,8 @@ def fill(path: str, values: dict) -> str:
     return UUID_RE.sub(lambda m: str(values.get(m.group(1), uuid.uuid4())), path)
 
 
-BODIES = {"/fields": {"field": "total", "value": "1"}, "/dismiss": {"reason": "other"}, "/edit": {"amount": 1}, "/reports": {},
+BODIES = {
+    "/fields/confirm": {"field": "odometer"},"/fields": {"field": "total", "value": "1"}, "/dismiss": {"reason": "other"}, "/edit": {"amount": 1}, "/reports": {},
           "/delete-raw-files": {"confirm": "DELETE"}, "/delete-everything": {"confirm": "x"}, "/warranty-rules/{rule_id}": {"months": 1},
           "/warranty-rules": {"vmrs_code": "031-001-001", "component": "x", "months": 1}, "/clients/{client_id}": {"name": "x"}}
 

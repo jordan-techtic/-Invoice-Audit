@@ -17,6 +17,18 @@ _TRANSLIT = {
 _VIN_OCR_FIXES = {"O": "0", "Q": "0", "I": "1"}  # I, O, Q never appear in real VINs
 
 
+def _decimal_text(s: str) -> str:
+    """Digits with . and , only -> a plain decimal string. The last separator is the decimal point when the other kind appears too
+    ("1.234,50" and "1,234.50" are both 1234.50); a lone comma is thousands only in groups of three ("1,250"), else a decimal comma ("1,5")."""
+    if "," in s and "." in s:
+        if s.rfind(",") > s.rfind("."):
+            return s.replace(".", "").replace(",", ".")
+        return s.replace(",", "")
+    if "," in s:
+        return s.replace(",", "") if re.fullmatch(r"\d{1,3}(,\d{3})+", s) else s.replace(",", ".", 1).replace(",", "")
+    return s
+
+
 def parse_money(v) -> Decimal | None:
     if v is None:
         return None
@@ -27,13 +39,8 @@ def parse_money(v) -> Decimal | None:
     s = re.sub(r"[^0-9.,]", "", s)
     if not s:
         return None
-    if "," in s and "." in s:
-        s = s.replace(",", "")
-    elif "," in s:
-        # "1,234" thousands vs "12,50" decimal comma
-        s = s.replace(",", "") if re.fullmatch(r"\d{1,3}(,\d{3})+", s) else s.replace(",", ".")
     try:
-        d = Decimal(s).quantize(Decimal("0.01"))
+        d = Decimal(_decimal_text(s)).quantize(Decimal("0.01"))
     except InvalidOperation:
         return None
     return -d if neg else d
@@ -44,14 +51,17 @@ def parse_number(v) -> Decimal | None:
         return None
     if isinstance(v, (int, float)):
         return Decimal(str(v))
-    s = re.sub(r"[^0-9.\-]", "", str(v).replace(",", ""))
+    raw = str(v)
+    neg = raw.strip().startswith("-")
+    s = _decimal_text(re.sub(r"[^0-9.,]", "", raw))
     try:
-        return Decimal(s) if s not in ("", "-", ".") else None
+        return (-Decimal(s) if neg else Decimal(s)) if s not in ("", ".") else None
     except InvalidOperation:
         return None
 
 
-_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y", "%b %d, %Y", "%B %d, %Y", "%d %b %Y", "%b %d %Y", "%m.%d.%Y"]
+_DATE_FORMATS = ["%Y-%m-%d", "%m/%d/%Y", "%m/%d/%y", "%m-%d-%Y", "%m-%d-%y", "%b %d, %Y", "%B %d, %Y", "%d %b %Y", "%b %d %Y", "%m.%d.%Y",
+                 "%Y/%m/%d", "%d-%b-%Y", "%d-%B-%Y", "%d-%b-%y", "%Y.%m.%d"]  # year first, and day-month-name-year as some shops print it
 
 
 def parse_date(v) -> date | None:
@@ -71,7 +81,7 @@ def parse_odometer(v) -> int | None:
     if n is None:
         return None
     n = int(n)
-    return n if 0 <= n <= 5_000_000 else None
+    return n if 1 <= n <= 5_000_000 else None   # 0 is a placeholder, not a reading
 
 
 def vin_check_digit_ok(vin: str) -> bool:
