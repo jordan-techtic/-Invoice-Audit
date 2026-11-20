@@ -20,6 +20,8 @@ class FakeProvider(ExtractionProvider):
     name = "fake"
     model = "fake-1"
     scripted: list[str] = []
+    second_read = False  # scripted pages are popped in order, so a re-read would eat the next page's script; tests switch it on
+    hints: list[str] = []
     classify_scripted: list[str] = []
     explain_scripted: list[str] = []
     explain_calls = 0
@@ -37,6 +39,7 @@ class FakeProvider(ExtractionProvider):
 
     @classmethod
     def reset(cls) -> None:
+        cls.second_read, cls.hints = False, []
         cls.scripted, cls.classify_scripted, cls.explain_scripted, cls.responder = [], [], [], None
         cls.extract_calls = cls.classify_calls = cls.explain_calls = 0
         cls.explain_fail = False
@@ -44,6 +47,8 @@ class FakeProvider(ExtractionProvider):
 
     def _raw_extract(self, image: bytes, media_type: str, correction: str | None) -> RawResponse:
         type(self).extract_calls += 1
+        if correction:
+            type(self).hints.append(correction)
         if type(self).scripted:
             text = type(self).scripted.pop(0)
         elif type(self).responder:

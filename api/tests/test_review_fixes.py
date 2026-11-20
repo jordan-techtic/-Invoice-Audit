@@ -84,10 +84,10 @@ def test_pm_services_inspections_and_split_components_have_their_own_codes():
            ["PM-A service", "PM-B svc", "Trailer PM inspection", "DOT annual inspection", "Annual DOT insp", "R&R U-joint",
             "DPF clean & bake", "R&R DPF", "R&R NOx sensor", "R&R DEF doser", "R&R EGR cooler", "R&R EGR valve",
             "R&R belt tensioner", "Replace serpentine belt", "Replace wiper blades", "R&R wiper motor", "PM service"]}
-    assert got == {"PM-A service": "000-001-001", "PM-B svc": "000-001-002", "Trailer PM inspection": "000-001-003",
-                   "DOT annual inspection": "000-001-004", "Annual DOT insp": "000-001-004", "R&R U-joint": "024-001-001",
+    assert got == {"PM-A service": "045-001-001", "PM-B svc": "045-001-009", "Trailer PM inspection": "000-001-002",
+                   "DOT annual inspection": "000-001-001", "Annual DOT insp": "000-001-001", "R&R U-joint": "024-001-001",
                    "DPF clean & bake": "043-001-005", "R&R DPF": "043-001-001", "R&R NOx sensor": "043-001-006", "R&R DEF doser": "043-001-002",
-                   "R&R EGR cooler": "043-001-007", "R&R EGR valve": "043-001-003", "R&R belt tensioner": "045-001-009",
+                   "R&R EGR cooler": "043-001-007", "R&R EGR valve": "043-001-003", "R&R belt tensioner": "045-001-010",
                    "Replace serpentine belt": "045-001-007", "Replace wiper blades": "002-001-006", "R&R wiper motor": "002-001-005",
                    "PM service": "045-001-001"}
 
@@ -144,3 +144,108 @@ def test_ai_rating_is_returned_and_flags_can_be_sorted_by_it(admin_client, world
     assert rated == sorted(rated, reverse=True) and scores[: len(rated)] == rated   # rated first, highest first; unrated last
     detail = admin_client.get(f"/clients/{cid}/flags/{flags[0]['id']}").json()
     assert "ai_score" in detail
+
+
+# ------------------------------------------------------------------ X5: misread digits
+from .helpers import sc  # noqa: E402
+
+
+def _labour_line(hours, total="320.00", rate="200.00"):
+    return [{"description": sc("R&R water pump"), "part_number": sc(None, 0), "qty": sc(None, 0), "parts_price": sc(None, 0),
+             "labour_hours": sc(hours), "labour_rate": sc(rate), "line_total": sc(total)}]
+
+
+def _fields(c, cid, num):
+    iid = next(i["id"] for i in c.get(f"/clients/{cid}/invoices").json() if i["invoice_number"] == num)
+    return c.get(f"/clients/{cid}/invoices/{iid}").json()
+
+
+def test_a_line_that_does_not_add_up_marks_every_number_on_it_not_just_the_total(admin_client, world):
+    from app.services.extraction.fake import FakeProvider
+    cid = world["a"]
+    upload(admin_client, cid, page_json(inv="X5-1", lines=_labour_line(1.8), subtotal="320.00", total="320.00"))
+    FakeProvider.reset()
+    ln = _fields(admin_client, cid, "X5-1")["lines"][0]
+    assert ln["labour_hours"]["needs_review"] and ln["labour_rate"]["needs_review"] and ln["line_total"]["needs_review"]
+    assert "don't add up" in ln["labour_hours"]["note"]
+
+
+def test_a_price_that_equals_the_line_total_with_quantity_above_one_is_questioned(admin_client, world):
+    cid = world["a"]
+    line = [{"description": sc("Brake pads"), "part_number": sc("BP-1"), "qty": sc(3), "parts_price": sc("57.24"),
+             "labour_hours": sc(None, 0), "labour_rate": sc(None, 0), "line_total": sc("57.24")}]
+    upload(admin_client, cid, page_json(inv="X5-2", lines=line, subtotal="57.24", total="57.24"))
+    ln = _fields(admin_client, cid, "X5-2")["lines"][0]
+    assert ln["parts_price"]["needs_review"] and "extended amount" in ln["parts_price"]["note"]
+
+
+def test_a_page_that_does_not_add_up_is_read_again_and_the_better_reading_is_kept(admin_client, world):
+    from app.services.extraction.fake import FakeProvider
+    cid = world["a"]
+    first = page_json(inv="X5-3", lines=_labour_line(1.8), subtotal="320.00", total="320.00")    # 1.8 h x $200 is not $320
+    second = page_json(inv="X5-3", lines=_labour_line(1.6), subtotal="320.00", total="320.00")   # 1.6 h x $200 = $320
+    FakeProvider.reset()
+    FakeProvider.second_read, FakeProvider.scripted = True, [first, second]
+    admin_client.post(f"/clients/{cid}/uploads", files=[("files", ("x5.png", png_bytes(seed=uuid.uuid4().int % 10**7), "image/png"))])
+    assert FakeProvider.extract_calls == 2 and "line 1 (R&R water pump)" in FakeProvider.hints[0] and "never correct it" in FakeProvider.hints[0]
+    ln = _fields(admin_client, cid, "X5-3")["lines"][0]
+    assert float(ln["labour_hours"]["value"]) == 1.6                                              # the reading that adds up
+    assert ln["labour_hours"]["needs_review"] and "two readings" in ln["labour_hours"]["note"]    # still shown to a person
+    assert not ln["labour_rate"]["needs_review"]                                                  # both readings agreed on the rate
+
+
+def test_a_page_that_adds_up_is_read_once(admin_client, world):
+    from app.services.extraction.fake import FakeProvider
+    cid = world["a"]
+    FakeProvider.reset()
+    FakeProvider.second_read, FakeProvider.scripted = True, [page_json(inv="X5-4")]
+    admin_client.post(f"/clients/{cid}/uploads", files=[("files", ("x5b.png", png_bytes(seed=uuid.uuid4().int % 10**7), "image/png"))])
+    assert FakeProvider.extract_calls == 1
+
+
+def test_an_unusable_second_reading_keeps_the_first(admin_client, world):
+    from app.services.extraction.fake import FakeProvider
+    cid = world["a"]
+    first = page_json(inv="X5-5", lines=_labour_line(1.8), subtotal="320.00", total="320.00")
+    FakeProvider.reset()
+    FakeProvider.second_read, FakeProvider.scripted = True, [first, page_json(inv="X5-5", lines=_labour_line(1.6) * 2)]   # a different number of lines
+    admin_client.post(f"/clients/{cid}/uploads", files=[("files", ("x5c.png", png_bytes(seed=uuid.uuid4().int % 10**7), "image/png"))])
+    ln = _fields(admin_client, cid, "X5-5")["lines"]
+    assert len(ln) == 1 and float(ln[0]["labour_hours"]["value"]) == 1.8 and ln[0]["labour_hours"]["needs_review"]
+
+
+def _two_parts(total, conf_total=0.95):
+    lines = [{"description": sc("Engine oil"), "part_number": sc("EO-1"), "qty": sc(15), "parts_price": sc("20.87"),      # misread: 11 x 20.71 = 227.81
+              "labour_hours": sc(None, 0), "labour_rate": sc(None, 0), "line_total": sc("313.05")},
+             {"description": sc("Air filter"), "part_number": sc("AF-1"), "qty": sc(1), "parts_price": sc("90.97"),
+              "labour_hours": sc(None, 0), "labour_rate": sc(None, 0), "line_total": sc("90.97")}]
+    body = page_json(lines=lines, subtotal=None, tax="0.00", total=total, inv=f"X5L-{uuid.uuid4().hex[:5]}")
+    return body.replace(f'"total": {{"value": "{total}", "confidence": 0.95}}', f'"total": {{"value": "{total}", "confidence": {conf_total}}}'), body
+
+
+def test_lines_that_add_up_alone_but_miss_a_clear_total_all_get_marked(admin_client, world):
+    cid = world["a"]
+    body, _ = _two_parts("318.78")                    # printed 227.81 + 90.97; the misread oil line adds up on its own
+    num = body.split('"invoice_number": {"value": "')[1].split('"')[0]
+    upload(admin_client, cid, body)
+    inv = _fields(admin_client, cid, num)
+    assert inv["header"]["total"]["needs_review"]
+    assert all(ln["line_total"]["needs_review"] and "one of the line totals" in ln["line_total"]["note"] for ln in inv["lines"])
+
+
+def test_a_doubtful_total_does_not_put_the_lines_under_suspicion(admin_client, world):
+    cid = world["a"]
+    body, _ = _two_parts("318.78", conf_total=0.5)
+    num = body.split('"invoice_number": {"value": "')[1].split('"')[0]
+    upload(admin_client, cid, body)
+    inv = _fields(admin_client, cid, num)
+    assert inv["header"]["total"]["needs_review"] and not any(ln["line_total"]["needs_review"] for ln in inv["lines"])
+
+
+def test_an_invoice_that_adds_up_marks_no_line(admin_client, world):
+    cid = world["a"]
+    body, _ = _two_parts("404.02")                    # 313.05 + 90.97: consistent as read
+    num = body.split('"invoice_number": {"value": "')[1].split('"')[0]
+    upload(admin_client, cid, body)
+    inv = _fields(admin_client, cid, num)
+    assert not inv["header"]["total"]["needs_review"] and not any(ln["line_total"]["needs_review"] for ln in inv["lines"])

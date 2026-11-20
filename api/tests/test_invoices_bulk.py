@@ -29,11 +29,12 @@ def test_bulk_check_marks_many_and_updates_uploads(admin_client, world):
     invs, ups = seed(admin_client, cid, 4)
     ids = [i["id"] for i in invs]
     blocked = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": ids[:3]}).json()
-    assert blocked == {"checked": 0, "already_checked": 0, "blocked": 3, "skipped": 0}   # each has a field marked Check: nothing waved through
+    assert blocked["checked"] == 0 and blocked["already_checked"] == 0 and blocked["skipped"] == 0   # each has a field marked Check: nothing waved through
+    assert sorted(b["id"] for b in blocked["blocked"]) == sorted(ids[:3]) and all(b["fields"] == ["odometer"] for b in blocked["blocked"])
     for i in ids[:3]:                                                                       # the analyst looks at the image and confirms it
         assert admin_client.post(f"/clients/{cid}/invoices/{i}/fields/confirm", json={"field": "odometer"}).json()["fields_to_check"] == 0
     r = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": ids[:3]}).json()
-    assert r == {"checked": 3, "already_checked": 0, "blocked": 0, "skipped": 0}
+    assert r == {"checked": 3, "already_checked": 0, "skipped": 0}   # no "blocked" key when nothing was held back
     now = {i["id"]: i for i in admin_client.get(f"/clients/{cid}/invoices").json()}
     assert [now[i]["review_status"] for i in ids] == ["reviewed"] * 3 + ["needs_review"] and now[ids[0]]["fields_to_check"] == 0
     odo = admin_client.get(f"/clients/{cid}/invoices/{ids[0]}").json()["header"]["odometer"]
@@ -41,7 +42,7 @@ def test_bulk_check_marks_many_and_updates_uploads(admin_client, world):
     statuses = {u["id"]: u["status"] for u in admin_client.get(f"/clients/{cid}/uploads").json()}
     assert [statuses[u["id"]] for u in ups[::-1]] == ["done"] * 3 + ["needs_review"]   # invoices are listed newest first; an upload is done once its invoice is checked
     again = admin_client.post(f"/clients/{cid}/invoices/bulk-check", json={"ids": ids}).json()
-    assert again == {"checked": 0, "already_checked": 3, "blocked": 1, "skipped": 0}   # safe to repeat; the 4th still needs its field looked at
+    assert again["checked"] == 0 and again["already_checked"] == 3 and [b["id"] for b in again["blocked"]] == [ids[3]]   # safe to repeat; the 4th still needs its field looked at
     rows = admin_client.get(f"/admin/audit-log?client_id={cid}&action=edit&limit=50").json()["rows"]
     assert any(x["detail"].get("op") == "bulk_mark_checked" and x["detail"]["count"] == 3 for x in rows)
 

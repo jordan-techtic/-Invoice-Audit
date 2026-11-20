@@ -38,6 +38,17 @@ NOTE_LOW = "Check this: hard to read on the invoice."
 NOTE_MISSING = "Check this: not found on the invoice."
 
 
+LINES_VS_TOTAL_NOTE = "Check this: the lines plus tax don't equal the total, so one of the line totals may be misread."
+
+
+def _mark_line_totals(lines: list[dict[str, "FieldResult"]]) -> None:
+    """A clearly read total that the lines don't reach usually means a line was misread (often one that adds up on its own,
+    so the line check passes it). Mark every line total so the person compares each with the image, not only the total."""
+    for ln in lines:
+        if ln["line_total"].value is not None and LINES_VS_TOTAL_NOTE not in (ln["line_total"].note or ""):
+            _lower(ln["line_total"], 0.6, LINES_VS_TOTAL_NOTE)
+
+
 def _lower(fr: FieldResult, cap: float, note: str) -> None:
     fr.confidence = min(fr.confidence, cap)
     fr.failed_check = True
@@ -56,7 +67,8 @@ def normalise_and_check(
     failed: list[str] = []
 
     def fr(d: dict) -> FieldResult:
-        return FieldResult(d["value"], float(d["confidence"]))
+        # a note set before the checks (for example "two readings disagree") sends the field to review with that reason
+        return FieldResult(d["value"], float(d["confidence"]), note=d.get("note"), failed_check=bool(d.get("note")))
 
     h = {k: fr(v) for k, v in merged_header.items()}
 
@@ -146,8 +158,14 @@ def normalise_and_check(
         if lab == 0 and price is None:
             continue
         if all(abs(c - lt) > tolerance for c in candidates):
-            _lower(ln["line_total"], 0.6, "Check this: quantity, price and hours don't add up to this total.")
+            # Any one of these numbers may be the misread one, so every number on the line is marked, not just the total.
+            for k in ("qty", "parts_price", "labour_hours", "labour_rate", "line_total"):
+                if ln[k].value is not None:
+                    _lower(ln[k], 0.6, "Check this: quantity, price and hours on this line don't add up to its total.")
             failed.append("line_math")
+        elif price is not None and qty > 1 and lab == 0 and abs(price - lt) <= tolerance:
+            _lower(ln["parts_price"], 0.6, f"Check this: the price for one equals the line total although the quantity is {qty}, so it may be the extended amount.")
+            failed.append("price_is_extended")
 
     # ---- a labour-only line whose quantity just repeats its hours: the model copied one field into the other
     for ln in lines:
@@ -171,8 +189,15 @@ def normalise_and_check(
             _lower(h["total"], 0.6, "Check this: subtotal plus tax doesn't equal the total.")
             failed.append("total_vs_subtotal_tax")
     elif sub is None and tot is not None and lines and abs(line_sum + (tax or Decimal(0)) - tot) > tolerance and line_sum > 0:
+        total_was_clear = h["total"].confidence >= threshold   # read before it is lowered just below
         _lower(h["total"], 0.6, "Check this: the lines plus tax don't equal the total.")
         failed.append("total_vs_lines")
+        if total_was_clear:
+            _mark_line_totals(lines)
+    # The subtotal agrees with the total but not with the lines: a line is the likely misread one.
+    if (sub is not None and tot is not None and lines and all(ln["line_total"].value is not None for ln in lines)
+            and abs(sub + (tax or Decimal(0)) - tot) <= tolerance and abs(line_sum - sub) > tolerance):
+        _mark_line_totals(lines)
 
     # ---- missing but expected
     for k in ("invoice_number", "invoice_date", "total", "shop_name"):

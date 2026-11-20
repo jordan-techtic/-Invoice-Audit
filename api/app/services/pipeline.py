@@ -111,6 +111,7 @@ def _run(db: Session, cid: uuid.UUID, up: Upload) -> None:
     provider = get_provider()
 
     pages: list[PageExtraction] = []
+    disagreements: list[dict] = []
     for n, img in enumerate(images, start=1):
         jpg = prepare_page(img)
         res = provider.extract_page(jpg)
@@ -119,7 +120,14 @@ def _run(db: Session, cid: uuid.UUID, up: Upload) -> None:
             jpg = prepare_page(img, rotate_cw=res.page.rotation_degrees)  # the AI says it is sideways/upside down
             res = provider.extract_page(jpg)
             _record_run(db, up, provider, res, "extraction")
-        pages.append(res.page)
+        page, differ = res.page, {}
+        problems = page_problems(page, tolerance) if page.is_invoice and provider.second_read else []
+        if problems:  # the numbers on this page don't add up: read it once more, pointing at where, and compare the two readings
+            again = provider.extract_page(jpg, hint=second_read_hint(problems))
+            _record_run(db, up, provider, again, "extraction_second_read")
+            page, differ = reconcile(page, again.page, tolerance)
+        pages.append(page)
+        disagreements.append(differ)
         storage.put(page_key(cid, up.id, n), jpg, "image/jpeg")
     up.page_count = len(images)
     db.commit()
@@ -132,6 +140,7 @@ def _run(db: Session, cid: uuid.UUID, up: Upload) -> None:
     stored, copies = 0, []
     for idxs in groups:
         merged = merge_group(pages, idxs)
+        apply_disagreements(merged, idxs, pages, disagreements)
         result = normalise_and_check(merged.header, merged.lines, tolerance=tolerance, threshold=threshold)
         same = same_invoice_already_stored(db, up, result.header)
         if same is not None:  # a second photo or scan of an invoice we already have: de-duplicate, never a flag
@@ -154,6 +163,89 @@ def _run(db: Session, cid: uuid.UUID, up: Upload) -> None:
         if copies:
             up.status_detail = f"{len(copies)} invoice{'s' if len(copies) != 1 else ''} in this file {'were' if len(copies) != 1 else 'was'} already uploaded, so {'they were' if len(copies) != 1 else 'it was'} skipped."
     db.commit()
+
+
+# ------------------------------------------------------------------ second read (fix-list X5)
+NUMERIC_LINE = ("qty", "parts_price", "labour_hours", "labour_rate", "line_total")
+COMPARED_HEADER = ("invoice_number", "invoice_date", "unit_number", "vin", "odometer", "subtotal", "tax", "total")
+DIFFER_NOTE = "Check this: two readings of this number disagree, so one of them is probably a misread."
+
+
+def _num(v) -> Decimal | None:
+    return normalize.parse_money(v) if v is not None else None
+
+
+def page_problems(page: PageExtraction, tol: Decimal) -> list[str]:
+    """Where the numbers on one page don't add up, in words the model can act on. Empty when everything adds up."""
+    out: list[str] = []
+    for n, ln in enumerate(page.lines, start=1):
+        tot, price, qty = _num(ln.line_total.value), _num(ln.parts_price.value), _num(ln.qty.value)
+        hrs, rate = _num(ln.labour_hours.value), _num(ln.labour_rate.value)
+        if tot is None:
+            continue
+        lab = hrs * rate if hrs is not None and rate is not None else None
+        if price is None and lab is None:
+            continue
+        q = qty if qty and qty > 0 else Decimal(1)
+        cands = {q * price + (lab or 0), price + (lab or 0)} if price is not None else {lab}
+        name = str(ln.description.value or "")[:40]
+        if all(abs(c - tot) > tol for c in cands):
+            out.append(f"line {n} ({name}): quantity {qty}, price {price}, hours {hrs} and rate {rate} don't give its total {tot}")
+        elif price is not None and q > 1 and not lab and abs(price - tot) <= tol:
+            out.append(f"line {n} ({name}): the price for one equals the line total although the quantity is {q}")
+    totals = [_num(ln.line_total.value) for ln in page.lines]
+    total, tax = _num(page.header.total.value), _num(page.header.tax.value)
+    if total is not None and totals and all(t is not None for t in totals) and abs(sum(totals) + (tax or 0) - total) > tol:
+        out.append(f"the line totals ({sum(totals)}) plus tax ({tax}) don't equal the total ({total})")
+    return out
+
+
+def second_read_hint(problems: list[str]) -> str:
+    return ("A first reading of this page did not add up here:\n- " + "\n- ".join(problems) +
+            "\nRead every number on the page again, digit by digit, exactly as it is printed. If the shop's own arithmetic is wrong, "
+            "copy it as printed anyway: never correct it.")
+
+
+def _same(a, b) -> bool:
+    na, nb = _num(a), _num(b)
+    if na is not None and nb is not None:
+        return na == nb
+    return _alnum(a) == _alnum(b)
+
+
+def reconcile(first: PageExtraction, second: PageExtraction, tol: Decimal) -> tuple[PageExtraction, dict]:
+    """Keep the reading whose numbers add up better, and list every number the two readings disagree on so a person looks at it.
+    When the second reading is not usable (different number of lines, or not an invoice) the first is kept as it was."""
+    if not second.is_invoice or len(second.lines) != len(first.lines):
+        return first, {}
+    keep = second if len(page_problems(second, tol)) < len(page_problems(first, tol)) else first
+    differ: dict = {"header": set(), "lines": {}}
+    for f in COMPARED_HEADER:
+        if not _same(getattr(first.header, f).value, getattr(second.header, f).value):
+            differ["header"].add(f)
+    for j, (a, b) in enumerate(zip(first.lines, second.lines)):
+        bad = {f for f in NUMERIC_LINE if not _same(getattr(a, f).value, getattr(b, f).value)}
+        if bad:
+            differ["lines"][j] = bad
+    return keep, differ
+
+
+def apply_disagreements(merged, idxs: list[int], pages: list[PageExtraction], disagreements: list[dict]) -> None:
+    """Carry each page's "the readings disagree" marks onto the merged invoice: lower the field and say why."""
+    def mark(d: dict) -> None:
+        d["confidence"] = min(float(d["confidence"]), 0.5)
+        d["note"] = DIFFER_NOTE
+    for i in idxs:
+        for f in disagreements[i].get("header", ()):
+            if merged.header.get(f, {}).get("value") is not None:
+                mark(merged.header[f])
+    k = 0
+    for i in idxs:
+        for j in range(len(pages[i].lines)):
+            for f in disagreements[i].get("lines", {}).get(j, ()):
+                if merged.lines[k].get(f, {}).get("value") is not None:
+                    mark(merged.lines[k][f])
+            k += 1
 
 
 def _alnum(s) -> str:
