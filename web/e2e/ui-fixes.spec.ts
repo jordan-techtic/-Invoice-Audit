@@ -32,7 +32,9 @@ const acceptedCount = async (r: APIRequestContext, cid: string) => (await (await
 /** Every invoice checked and the checks run, so nothing blocks the report. */
 async function readyForReport(request: APIRequestContext, cid: string) {
   const all = await invoices(request, cid);
-  await request.post(`/api/clients/${cid}/invoices/bulk-check`, { data: { ids: all.map((i) => i.id) } });
+  const r = await (await request.post(`/api/clients/${cid}/invoices/bulk-check`, { data: { ids: all.map((i) => i.id) } })).json();
+  // Bulk check leaves any invoice with a field still marked Check to the analyst; confirm those one by one, as an analyst would.
+  for (const b of (r.blocked ?? []) as { id: string }[]) await request.post(`/api/clients/${cid}/invoices/${b.id}/mark-checked?confirm_as_printed=true`);
   const run = await (await request.post(`/api/clients/${cid}/run-flags`)).json();
   for (let i = 0; i < 40; i++) {
     const r = await (await request.get(`/api/clients/${cid}/flag-runs/${run.job_id}`)).json();
@@ -51,6 +53,13 @@ test("UI1: moving from one invoice to the next never shows the previous invoice'
   await page.goto(`/invoices/${a.id}`);
   await expect(page.getByLabel("Invoice number")).toHaveValue(numberA);
 
+  const looksRight = page.locator("button:visible", { hasText: "Looks right" });                       // confirm each visible field marked Check
+  for (let i = 0; i < 20; i++) {
+    const n = await looksRight.count();
+    if (n === 0) break;
+    await looksRight.first().click();
+    await expect(looksRight).toHaveCount(n - 1);                                                         // let the page take the confirmation before the next click
+  }
   await page.getByRole("button", { name: "Mark as checked" }).click();
   const next = page.getByRole("link", { name: /Check next invoice/ }).first();
   await expect(next).toBeVisible();
@@ -214,4 +223,37 @@ test("UI3: the public report page and its API answers ask not to be indexed", as
   const api = await request.get("/api/public/reports/not-a-real-token");
   expect(api.headers()["x-robots-tag"]).toContain("noindex");
   expect(api.headers()["referrer-policy"]).toBe("no-referrer");
+});
+
+// ============================================================================================ invoices table order
+test("Invoices table: newest created first by default, whatever the printed date; a column header still sorts", async ({ page, request }) => {
+  const cid = await apiLogin(request);
+  let seq = 0;
+  const row = (n: string, created: string, date: string) => ({ id: `00000000-0000-4000-8000-${String(++seq).padStart(12, "0")}`, shop: `Shop ${n}`, invoice_number: n, invoice_date: date, unit_number: "T-1", total: 100, review_status: "needs_review", fields_to_check: 1, created_at: created });
+  // the API sends them newest created first; the printed dates are deliberately out of that order
+  const list = [row("N3", "2026-11-20T10:03:00+00:00", "2025-01-10"), row("N2", "2026-11-20T10:02:00+00:00", "2026-09-01"), row("N1", "2026-11-20T10:01:00+00:00", "2026-03-15")];
+  await page.route(`**/api/clients/${cid}/invoices`, (route) => route.fulfill({ json: list }));
+  await uiLogin(page);
+  await page.goto("/invoices");
+  const order = async () => (await page.locator("tbody tr[aria-selected] td:nth-child(4)").allInnerTexts()).map((t) => t.trim());
+  await expect.poll(order).toEqual(["N3", "N2", "N1"]);                                  // newest created first, not newest invoice date (that would be N2, N1, N3)
+  await expect(page.getByRole("button", { name: /^Added ↓/ })).toBeVisible();            // and the header says so
+  await page.getByRole("button", { name: /^Date/ }).click();
+  await expect.poll(order).toEqual(["N3", "N1", "N2"]);                                  // an explicit column sort wins: oldest printed date first
+  await page.getByRole("button", { name: /^Added/ }).click();
+  await expect.poll(order).toEqual(["N3", "N2", "N1"]);                                  // back to newest created first
+});
+
+test("Invoices table (real API, no mocking): the invoices just uploaded are the first rows, newest first", async ({ page, request }) => {
+  test.setTimeout(120_000);
+  const cid = await apiLogin(request);
+  await readyForReport(request, cid);                                   // settle older invoices first
+  const first = await uploadNew(request, cid, 1);
+  const second = await uploadNew(request, cid, 1);
+  const third = await uploadNew(request, cid, 1);
+  const uploadedOldestFirst = [first[0], second[0], third[0]].map((i) => i.invoice_number);
+  await uiLogin(page);
+  await page.goto("/invoices");
+  const top = async () => (await page.locator("tbody tr[aria-selected] td:nth-child(4)").allInnerTexts()).slice(0, 3).map((t) => t.trim());
+  await expect.poll(top).toEqual([...uploadedOldestFirst].reverse());
 });

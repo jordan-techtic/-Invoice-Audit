@@ -24,6 +24,8 @@ export type ReviewStatus = "needs_review" | "ready" | "reviewed";
 export interface InvoiceSummary {
   id: string; shop: string | null; invoice_number: string | null; invoice_date: string | null;
   unit_number: string | null; total: number | string | null; review_status: ReviewStatus; fields_to_check: number;
+  /** When the invoice was created (uploaded and read). The list comes newest first by this. */
+  created_at: string;
 }
 export interface FieldState {
   value: string | number | null; confidence: number | null; needs_review: boolean;
